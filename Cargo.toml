@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["main-app"]
+members = ["main-app", "snake-api-lib"]
 
 
 [profile.release]
