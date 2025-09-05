@@ -1,3 +1,7 @@
+use std::ops::{Add, Sub};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+
 pub const GRID_X: usize = 32;
 pub const GRID_Y: usize = 40;
 
@@ -33,7 +37,29 @@ impl Coord {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+impl Add for Coord {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            i: self.i + rhs.i,
+            j: self.j + rhs.j,
+        }
+    }
+}
+
+impl Sub for Coord {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            i: self.i.saturating_sub(rhs.i),
+            j: self.j.saturating_sub(rhs.j),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, EnumIter)]
 pub enum Direction {
     #[default]
     Left = 0,
