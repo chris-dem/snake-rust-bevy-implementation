@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_rand::prelude::*;
 use bevy_smud::prelude::*;
 
 use crate::{game_logic::GamePlugin, setup::CameraPlugin};
@@ -11,6 +12,7 @@ pub mod snake;
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, SmudPlugin))
+        .add_plugins(EntropyPlugin::<WyRand>::with_seed(Default::default()))
         .add_plugins((CameraPlugin, GamePlugin))
         .run();
 }

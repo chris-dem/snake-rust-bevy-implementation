@@ -1,13 +1,13 @@
 use std::ops::{Add, Sub};
 use strum_macros::EnumIter;
 
-pub const GRID_X: usize = 32;
-pub const GRID_Y: usize = 40;
+pub const GRID_X: usize = 40;
+pub const GRID_Y: usize = 32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {
-    pub i: u8,
-    pub j: u8,
+    pub row: u8,
+    pub col: u8,
 }
 
 impl Default for Coord {
@@ -18,20 +18,22 @@ impl Default for Coord {
 
 impl Coord {
     pub fn l1(self, other: Self) -> u8 {
-        self.i.abs_diff(other.i) + self.j.abs_diff(other.j)
+        self.row.abs_diff(other.row) + self.col.abs_diff(other.col)
     }
     pub fn l0(self, other: Self) -> u8 {
-        self.i.abs_diff(other.i).max(self.j.abs_diff(other.j))
+        self.row
+            .abs_diff(other.row)
+            .max(self.col.abs_diff(other.col))
     }
 
     pub fn into_index(self) -> usize {
-        (self.i as usize) * GRID_Y + self.j as usize
+        (self.row as usize) * GRID_Y + self.col as usize
     }
 
     pub fn middle() -> Self {
         Self {
-            i: GRID_X as u8 / 2,
-            j: GRID_Y as u8 / 2,
+            row: GRID_Y as u8 / 2,
+            col: GRID_X as u8 / 2,
         }
     }
 }
@@ -41,8 +43,8 @@ impl Add for Coord {
 
     fn add(self, rhs: Self) -> Self::Output {
         Self {
-            i: self.i + rhs.i,
-            j: self.j + rhs.j,
+            row: self.row + rhs.row,
+            col: self.col + rhs.col,
         }
     }
 }
@@ -52,8 +54,8 @@ impl Sub for Coord {
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
-            i: self.i.saturating_sub(rhs.i),
-            j: self.j.saturating_sub(rhs.j),
+            row: self.row.saturating_sub(rhs.row),
+            col: self.col.saturating_sub(rhs.col),
         }
     }
 }

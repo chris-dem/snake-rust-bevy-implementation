@@ -54,8 +54,8 @@ impl Display for ArrSnake {
             write!(f, "{i_print:^2}|")?;
             for j in 0..GRID_Y {
                 let indx = Coord {
-                    i: i as u8,
-                    j: j as u8,
+                    row: i as u8,
+                    col: j as u8,
                 }
                 .into_index();
                 let direction_vecs = [
@@ -87,23 +87,23 @@ fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
     }
 
     match (coord, direction) {
-        (Coord { j: 0, .. }, Direction::Left) | (Coord { i: 0, .. }, Direction::Up) => {
+        (Coord { col: 0, .. }, Direction::Left) | (Coord { row: 0, .. }, Direction::Up) => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { i, .. }, Direction::Down) if i == GRID_X as u8 => {
+        (Coord { row, .. }, Direction::Down) if row == GRID_X as u8 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { j, .. }, Direction::Right) if j == GRID_Y as u8 => {
+        (Coord { col, .. }, Direction::Right) if col == GRID_Y as u8 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { i, j }, d) => {
+        (Coord { row, col }, d) => {
             let d = d as i8;
             let (ni, nj) = if d % 2 == 0 {
-                (i, (j as i8 + (d - 1)) as u8)
+                (row, (col as i8 + (d - 1)) as u8)
             } else {
-                ((i as i8 + d - 2) as u8, j)
+                ((row as i8 + d - 2) as u8, col)
             };
-            Ok(Coord { i: ni, j: nj })
+            Ok(Coord { row: ni, col: nj })
         }
     }
 }
@@ -117,8 +117,9 @@ impl ArrSnake {
             .iter_zeros()
             .choose(rng)
             .map(|x| Coord {
-                i: (x / GRID_Y) as u8,
-                j: (x % GRID_Y) as u8,
+                // I want to experiment with uhh this
+                row: (x / GRID_Y) as u8,
+                col: (x % GRID_Y) as u8,
             })
     }
 }
@@ -200,7 +201,7 @@ mod tests {
     fn step_one_left_from_beginning_no_food() {
         let mut snake = ArrSnake::default();
         snake.step(false).expect("Should step normally");
-        let middle = Coord::middle() - Coord { i: 0, j: 1 };
+        let middle = Coord::middle() - Coord { row: 0, col: 1 };
         let els = snake.get_elements();
         assert_eq!(els.len(), GRID_X * GRID_Y);
         let rest = els
@@ -219,7 +220,7 @@ mod tests {
     fn step_one_left_from_beginning_food() {
         let mut snake = ArrSnake::default();
         snake.step(true).expect("Should step normally");
-        let middle = Coord::middle() - Coord { i: 0, j: 1 };
+        let middle = Coord::middle() - Coord { row: 0, col: 1 };
         let els = snake.get_elements();
         assert_eq!(els.len(), GRID_X * GRID_Y);
         let rest = els
@@ -245,8 +246,8 @@ mod tests {
         snake.step(true).expect("Should step normally");
         snake.direction(Direction::Up);
         snake.step(false).expect("Should step normally");
-        let left = Coord::middle() - Coord { i: 0, j: 1 };
-        let up = left - Coord { i: 1, j: 0 };
+        let left = Coord::middle() - Coord { row: 0, col: 1 };
+        let up = left - Coord { row: 1, col: 0 };
         let els = snake.get_elements();
         assert_eq!(els.len(), GRID_X * GRID_Y);
         let rest = els

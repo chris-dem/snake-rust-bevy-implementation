@@ -29,8 +29,8 @@ impl GameAPI {
         let mid = Coord::middle();
         let c = loop {
             let c = Coord {
-                i: rng.random_range(0..GRID_X as u8),
-                j: rng.random_range(0..GRID_Y as u8),
+                row: rng.random_range(0..GRID_X as u8),
+                col: rng.random_range(0..GRID_Y as u8),
             };
             if mid.l0(c) > 1 {
                 break c;
@@ -44,7 +44,7 @@ impl GameAPI {
     }
 
     pub fn get_pos(&self, pos: Coord) -> Option<Cell> {
-        if pos.i > GRID_X as u8 && pos.j > GRID_Y as u8 {
+        if pos.row > GRID_X as u8 && pos.col > GRID_Y as u8 {
             return None;
         }
         if self.apples == pos {
