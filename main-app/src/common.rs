@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-pub const GRID_WIDTH: usize = 40;
-pub const GRID_HEIGHT: usize = 30;
+
+use crate::setup::WinDimension;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Position {
@@ -13,6 +13,12 @@ impl Position {
         Self { i, j }
     }
 
+    pub(crate) fn from_win_dims_vec(self, win_dims: WinDimension) -> Vec2 {
+        let (cw, ch) = win_dims.cell_dims();
+        let (ww, wh) = win_dims.window_dims();
+        self.pos_to_vec(cw, ch, ww, wh)
+    }
+
     pub(crate) fn pos_to_vec(
         self,
         width: f32,
@@ -21,8 +27,8 @@ impl Position {
         max_height: f32,
     ) -> Vec2 {
         Vec2::new(
-            self.i as f32 * width - max_width / 2. + width / 2.,
-            self.j as f32 * height - max_height / 2. + height / 2.,
+            self.j as f32 * width - max_width / 2. + width / 2.,
+            self.i as f32 * height - max_height / 2. + height / 2.,
         )
     }
 }

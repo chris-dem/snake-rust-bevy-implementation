@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 bevy = "0.16.1"
-bevy_prototype_lyon = { git = "https://github.com/rparrett/bevy_prototype_lyon", branch = "fix-dynamic-examples" }
+bevy_smud = "0.11.0"
+snake-api-lib = { path = "../snake-api-lib" }

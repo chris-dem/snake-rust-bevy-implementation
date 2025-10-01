@@ -1,20 +1,27 @@
+use crate::{
+    common::{Cell, Coord, GRID_X, GRID_Y},
+    snake::{ArrSnake, SnakeTrait},
+};
+use anyhow::Result as ARes;
 use rand::prelude::*;
-
-use crate::{common::Coord, snake::{ArrSnake, SnakeTrait}};
-
 
 pub mod common;
 pub mod snake;
 
+pub enum GameState {
+    Win,
+    Lost,
+    Base,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct GameAPI {
-    snake: ArrSnake,
-    apples: Coord,
+    pub snake: ArrSnake,
+    pub apples: Coord,
 }
 
 impl GameAPI {
-    fn new(rng: Option<&mut dyn RngCore>) -> Self {
+    pub fn new(rng: Option<&mut dyn RngCore>) -> Self {
         let rng = match rng {
             None => &mut SmallRng::from_os_rng(),
             Some(rng) => rng,
@@ -31,15 +38,37 @@ impl GameAPI {
         };
 
         Self {
-            direction: Direction::Left,
-            head: vec![Coord::middle()],
+            snake: ArrSnake::default(),
             apples: c,
         }
     }
 
-    fn get_pos(&self, x: u8, y: u8) -> Option<Cell> {
-        if x > GRID_X && y > GRID_Y {
-            None
+    pub fn get_pos(&self, pos: Coord) -> Option<Cell> {
+        if pos.i > GRID_X as u8 && pos.j > GRID_Y as u8 {
+            return None;
+        }
+        if self.apples == pos {
+            return Some(Cell::Apple);
+        }
+        if self.snake.check_cell(pos)? {
+            Some(Cell::Snake)
+        } else {
+            Some(Cell::Empty)
+        }
+    }
+
+    pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<GameState> {
+        if !self.snake.is_next_valid() {
+            return Ok(GameState::Lost);
+        }
+        let head = self.snake.next_step()?;
+        let with_food = head == self.apples;
+        self.snake.step(with_food)?;
+        if let Some(coord) = self.snake.get_free_spot(rng) {
+            self.apples = coord;
+            Ok(GameState::Base)
+        } else {
+            Ok(GameState::Win)
         }
     }
 }

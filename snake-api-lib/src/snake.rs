@@ -4,6 +4,7 @@ use crate::common::{Coord, Direction, GRID_X, GRID_Y};
 use anyhow::{Result as AResult, anyhow};
 use bitvec::prelude::*;
 use itertools::Itertools;
+use rand::prelude::*;
 use strum::IntoEnumIterator;
 
 // Fixed-size bit array
@@ -79,43 +80,52 @@ impl Display for ArrSnake {
     }
 }
 
-impl ArrSnake {
-    fn next_step(&self, coord: Coord, direction: Direction) -> AResult<Coord> {
-        let ind = coord.into_index();
-        if ind > GRID_X * GRID_Y {
-            return Err(anyhow!("Out of bounds"));
-        }
+fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
+    let ind = coord.into_index();
+    if ind > GRID_X * GRID_Y {
+        return Err(anyhow!("Out of bounds"));
+    }
 
-        match (coord, direction) {
-            (Coord { j: 0, .. }, Direction::Left) | (Coord { i: 0, .. }, Direction::Up) => Err(
-                anyhow!("Invalid coordinate {:?}, {:?}", coord, self.direction),
-            ),
-            (Coord { i, .. }, Direction::Down) if i == GRID_X as u8 => Err(anyhow!(
-                "Invalid coordinate {:?}, {:?}",
-                coord,
-                self.direction
-            )),
-            (Coord { j, .. }, Direction::Right) if j == GRID_Y as u8 => Err(anyhow!(
-                "Invalid coordinate {:?}, {:?}",
-                coord,
-                self.direction
-            )),
-            (Coord { i, j }, d) => {
-                let d = d as i8;
-                let (ni, nj) = if d % 2 == 0 {
-                    (i, (j as i8 + (d - 1)) as u8)
-                } else {
-                    ((i as i8 + d - 2) as u8, j)
-                };
-                Ok(Coord { i: ni, j: nj })
-            }
+    match (coord, direction) {
+        (Coord { j: 0, .. }, Direction::Left) | (Coord { i: 0, .. }, Direction::Up) => {
+            Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
+        (Coord { i, .. }, Direction::Down) if i == GRID_X as u8 => {
+            Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
+        }
+        (Coord { j, .. }, Direction::Right) if j == GRID_Y as u8 => {
+            Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
+        }
+        (Coord { i, j }, d) => {
+            let d = d as i8;
+            let (ni, nj) = if d % 2 == 0 {
+                (i, (j as i8 + (d - 1)) as u8)
+            } else {
+                ((i as i8 + d - 2) as u8, j)
+            };
+            Ok(Coord { i: ni, j: nj })
+        }
+    }
+}
+
+impl ArrSnake {
+    pub fn next_step(&self) -> AResult<Coord> {
+        add_direction(self.head, self.direction)
+    }
+    pub fn get_free_spot(&self, rng: &mut dyn RngCore) -> Option<Coord> {
+        (self.maps[0] | self.maps[1] | self.maps[2] | self.maps[3])
+            .iter_zeros()
+            .choose(rng)
+            .map(|x| Coord {
+                i: (x / GRID_Y) as u8,
+                j: (x % GRID_Y) as u8,
+            })
     }
 }
 
 impl SnakeTrait for ArrSnake {
     fn is_next_valid(&self) -> bool {
-        self.next_step(self.head, self.direction)
+        self.next_step()
             .ok()
             .and_then(|e| self.check_cell(e))
             .is_some_and(|x| !x)
@@ -138,7 +148,7 @@ impl SnakeTrait for ArrSnake {
     }
 
     fn step(&mut self, with_food: bool) -> AResult<()> {
-        let res = self.next_step(self.head, self.direction)?;
+        let res = self.next_step()?;
         let index = res.into_index();
         {
             let mut ind = self.maps[self.direction as usize]
@@ -151,7 +161,7 @@ impl SnakeTrait for ArrSnake {
             let tail_index = self.tail.into_index();
             for dir in Direction::iter() {
                 if self.maps[dir as usize][tail_index] {
-                    self.tail = self.next_step(self.tail, dir)?;
+                    self.tail = add_direction(self.tail, dir)?;
                 }
                 self.maps[dir as usize].set(tail_index, false);
             }

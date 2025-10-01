@@ -6,3 +6,5 @@ members = ["main-app", "snake-api-lib"]
 [profile.release]
 opt-level = "s"  # Maximum optimization (0-3, or 's' for size, 'z' for minimal size)
 
+
+

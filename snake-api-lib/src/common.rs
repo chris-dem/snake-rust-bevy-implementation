@@ -1,5 +1,4 @@
 use std::ops::{Add, Sub};
-use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 pub const GRID_X: usize = 32;
@@ -59,7 +58,7 @@ impl Sub for Coord {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumIter, Default)]
 pub enum Direction {
     #[default]
     Left = 0,
