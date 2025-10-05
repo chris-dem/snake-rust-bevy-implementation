@@ -3,7 +3,7 @@ use bevy_rand::prelude::*;
 use bevy_smud::prelude::*;
 
 use crate::{
-    endscreen::{EndScreenPlugin, EndScreenState},
+    endscreen::EndScreenPlugin,
     game_logic::GamePlugin,
     menu::MenuPlugin,
     setup::CameraPlugin,

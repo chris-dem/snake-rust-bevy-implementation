@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use crate::{
     AppState,
     common::{draw_button, label_bundle},
-    constants::TEXT_COLOR_TITLE,
 };
 
 pub struct MenuPlugin;

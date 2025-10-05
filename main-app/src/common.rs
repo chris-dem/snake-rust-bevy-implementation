@@ -40,7 +40,7 @@ pub(crate) fn label_bundle(
         TextFont {
             // This font is loaded and will be used instead of the default font.
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-            font_size: font_size,
+            font_size,
             ..default()
         },
         TextColor(text_col),

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     AppState,
     constants::TEXT_COLOR,
-    game_logic::{self, GameState},
+    game_logic::GameState,
 };
 
 pub(crate) struct UiPlugin;
