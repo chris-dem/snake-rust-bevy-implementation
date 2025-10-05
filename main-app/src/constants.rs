@@ -1,9 +1,6 @@
 use bevy::color::{
     Srgba,
-    palettes::{
-        css::{LIGHT_CORAL, PURPLE, TEAL},
-        tailwind::{PURPLE_400, TEAL_400, YELLOW_100},
-    },
+    palettes::tailwind::{PURPLE_400, TEAL_400, YELLOW_100},
 };
 
 pub(crate) const FRAME_MUL: f32 = 1.2;
