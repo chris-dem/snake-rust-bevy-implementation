@@ -15,7 +15,7 @@ pub(crate) fn pos_to_vec(
 ) -> Vec2 {
     Vec2::new(
         coord.col as f32 * width - max_width / 2. + width / 2.,
-        -(coord.row as f32 * height - max_height / 2.) + height / 2.,
+        -(coord.row as f32) * height + max_height / 2. - height / 2.,
     )
 }
 

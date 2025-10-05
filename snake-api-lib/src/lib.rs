@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     common::{Cell, Coord, GRID_X, GRID_Y},
     snake::{ArrSnake, SnakeTrait},
@@ -8,9 +10,11 @@ use rand::prelude::*;
 pub mod common;
 pub mod snake;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum GameState {
     Win,
     Lost,
+    #[default]
     Base,
 }
 
@@ -18,6 +22,39 @@ pub enum GameState {
 pub struct GameAPI {
     pub snake: ArrSnake,
     pub apples: Coord,
+}
+
+impl Display for GameAPI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "")?;
+        for i in 0..=GRID_Y {
+            write!(f, "{:^3}|", i )?;
+        }
+        writeln!(f)?;
+        for i in 0..GRID_X {
+            let i_print = i + 1;
+            write!(f, "{i_print:^3}|")?;
+            for j in 0..GRID_Y {
+                let indx = Coord {
+                    row: i as u8,
+                    col: j as u8,
+                };
+                if indx == self.snake.head {
+                    write!(f, "{:^3}|", 'H')?;
+                } else if indx == self.snake.tail {
+                    write!(f, "{:^3}|", 'T')?;
+                } else if indx == self.apples {
+                    write!(f, "{:^3}|", 'A')?;
+                } else if self.snake.check_cell(indx).is_some_and(|x| x) {
+                    write!(f, "{:^3}|", 'S')?;
+                } else {
+                    write!(f, "{:^3}|", '*')?;
+                }
+            }
+            writeln!(f)?;
+        }
+        writeln!(f)
+    }
 }
 
 impl GameAPI {
@@ -64,11 +101,13 @@ impl GameAPI {
         let head = self.snake.next_step()?;
         let with_food = head == self.apples;
         self.snake.step(with_food)?;
-        if let Some(coord) = self.snake.get_free_spot(rng) {
-            self.apples = coord;
-            Ok(GameState::Base)
-        } else {
-            Ok(GameState::Win)
+        if with_food {
+            if let Some(coord) = self.snake.get_free_spot(rng) {
+                self.apples = coord;
+            } else {
+                return Ok(GameState::Win);
+            }
         }
+        Ok(GameState::Base)
     }
 }

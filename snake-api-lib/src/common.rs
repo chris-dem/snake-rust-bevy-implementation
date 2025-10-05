@@ -1,8 +1,13 @@
-use std::ops::{Add, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, Sub},
+};
 use strum_macros::EnumIter;
 
+// pub const GRID_X: usize = 10;
 pub const GRID_X: usize = 40;
 pub const GRID_Y: usize = 32;
+// pub const GRID_Y: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {
@@ -67,6 +72,18 @@ pub enum Direction {
     Up = 1,
     Right = 2,
     Down = 3,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c = match self {
+            Self::Up => '↑',
+            Self::Right => '→',
+            Self::Down => '↓',
+            Self::Left => '←',
+        };
+        write!(f, "{c}")
+    }
 }
 
 pub enum Cell {

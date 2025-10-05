@@ -8,7 +8,7 @@ use rand::prelude::*;
 use strum::IntoEnumIterator;
 
 // Fixed-size bit array
-type GridBits = BitArr!(for GRID_X * GRID_Y, in u64); // 768 bits using u64 storage
+type GridBits = BitArr!(for GRID_X * GRID_Y, in u64, Msb0); // 768 bits using u64 storage
 
 pub trait SnakeTrait: Debug + Sized {
     fn check_cell(&self, coords: Coord) -> Option<bool>;
@@ -21,9 +21,9 @@ pub trait SnakeTrait: Debug + Sized {
 #[derive(Debug, Clone, Copy)]
 pub struct ArrSnake {
     maps: [GridBits; 4],
-    direction: Direction,
-    head: Coord,
-    tail: Coord,
+    pub direction: Direction,
+    pub head: Coord,
+    pub tail: Coord,
 }
 
 impl Default for ArrSnake {
