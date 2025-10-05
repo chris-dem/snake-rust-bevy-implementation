@@ -10,11 +10,10 @@ use rand::prelude::*;
 pub mod common;
 pub mod snake;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepResult {
     Win,
     Lost,
-    #[default]
     Base,
 }
 
@@ -22,6 +21,54 @@ pub enum StepResult {
 pub struct GameAPI {
     pub snake: ArrSnake,
     pub apples: Coord,
+    pub mode: Speed,
+    pub steps: u128,
+    pub score: u128,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Speed {
+    #[default]
+    Slow,
+    Medium,
+    Hard,
+    VeryHard,
+    GodMode,
+}
+
+impl Display for Speed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Speed::Slow => "Easy",
+            Speed::Medium => "Medium",
+            Speed::Hard => "Hard",
+            Speed::VeryHard => "Very Hard",
+            Speed::GodMode => "GodLike",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl Speed {
+    fn to_score(self) -> u128 {
+        match self {
+            Self::Slow => 10,
+            Self::Medium => 20,
+            Self::Hard => 50,
+            Self::VeryHard => 100,
+            Self::GodMode => 150,
+        }
+    }
+
+    pub fn to_time_speed(self) -> f32 {
+        match self {
+            Self::Slow => 1.,
+            Self::Medium => 0.9,
+            Self::Hard => 0.8,
+            Self::VeryHard => 0.7,
+            Self::GodMode => 0.5,
+        }
+    }
 }
 
 impl Display for GameAPI {
@@ -77,6 +124,9 @@ impl GameAPI {
         Self {
             snake: ArrSnake::default(),
             apples: c,
+            steps: 0,
+            score: 0,
+            mode: Speed::default(),
         }
     }
 
@@ -94,6 +144,18 @@ impl GameAPI {
         }
     }
 
+    fn set_speed(&mut self) {
+        let f = self.snake.size as f64 / (GRID_X * GRID_Y) as f64;
+        self.mode = match f {
+            (0.0..0.2) => Speed::Slow,
+            (0.2..0.4) => Speed::Medium,
+            (0.4..0.6) => Speed::Hard,
+            (0.6..0.8) => Speed::VeryHard,
+            (0.8..=1.) => Speed::GodMode,
+            _ => unreachable!("Should not exceed 1"),
+        };
+    }
+
     pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<StepResult> {
         if !self.snake.is_next_valid() {
             return Ok(StepResult::Lost);
@@ -108,6 +170,8 @@ impl GameAPI {
                 return Ok(StepResult::Win);
             }
         }
+        self.set_speed();
+        self.score += with_food as u128 * self.mode.to_score();
         Ok(StepResult::Base)
     }
 }

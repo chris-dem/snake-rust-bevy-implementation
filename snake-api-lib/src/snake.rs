@@ -83,8 +83,7 @@ impl Display for ArrSnake {
 }
 
 fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
-    let ind = coord.into_index();
-    if ind > GRID_X * GRID_Y {
+    if coord.row >= GRID_X as u8 || coord.col >= GRID_Y as u8 {
         return Err(anyhow!("Out of bounds"));
     }
 
@@ -92,10 +91,10 @@ fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
         (Coord { col: 0, .. }, Direction::Left) | (Coord { row: 0, .. }, Direction::Up) => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { row, .. }, Direction::Down) if row == GRID_X as u8 => {
+        (Coord { col, .. }, Direction::Right) if col == GRID_Y as u8 - 1 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { col, .. }, Direction::Right) if col == GRID_Y as u8 => {
+        (Coord { row, .. }, Direction::Down) if row == GRID_X as u8 - 1 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
         (Coord { row, col }, d) => {
@@ -117,9 +116,9 @@ impl ArrSnake {
     pub fn get_free_spot(&self, rng: &mut dyn RngCore) -> Option<Coord> {
         (self.maps[0] | self.maps[1] | self.maps[2] | self.maps[3])
             .iter_zeros()
+            .filter(|x| *x < GRID_X * GRID_Y)
             .choose(rng)
             .map(|x| Coord {
-                // I want to experiment with uhh this
                 row: (x / GRID_Y) as u8,
                 col: (x % GRID_Y) as u8,
             })
@@ -135,7 +134,7 @@ impl SnakeTrait for ArrSnake {
     }
 
     fn check_cell(&self, coords: Coord) -> Option<bool> {
-        if coords.row >= GRID_X as u8 && coords.col > GRID_Y as u8 {
+        if coords.row >= GRID_X as u8 && coords.col >= GRID_Y as u8 {
             return None;
         }
         let indx = coords.into_index();

@@ -6,8 +6,7 @@ use strum_macros::EnumIter;
 
 pub const GRID_X: usize = 10;
 pub const GRID_Y: usize = 10;
-// pub const GRID_X: usize = 40;
-// pub const GRID_Y: usize = 32;
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {

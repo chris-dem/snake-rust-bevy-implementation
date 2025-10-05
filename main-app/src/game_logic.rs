@@ -66,11 +66,16 @@ fn step_snake(
     mut rng: GlobalEntropy<WyRand>,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_state_sub: ResMut<NextState<EndScreenState>>,
+    mut speed: ResMut<Time<Fixed>>,
 ) {
     let s = match snake_state.0.next(&mut rng) {
         Ok(state) => state,
         Err(e) => panic!("{}", e.to_string()),
     };
+    speed.set_timestep(
+        Duration::try_from_secs_f32(snake_state.0.mode.to_time_speed())
+            .expect("Should be valid time"),
+    );
     if s != StepResult::Base {
         next_state.set(AppState::EndScreen);
         let next_sub = if s == StepResult::Win {
