@@ -24,6 +24,7 @@ pub struct ArrSnake {
     pub direction: Direction,
     pub head: Coord,
     pub tail: Coord,
+    pub size: usize,
 }
 
 impl Default for ArrSnake {
@@ -37,6 +38,7 @@ impl Default for ArrSnake {
             direction: def_dir,
             head: middle,
             tail: middle,
+            size: 0,
         }
     }
 }
@@ -129,15 +131,15 @@ impl SnakeTrait for ArrSnake {
         self.next_step()
             .ok()
             .and_then(|e| self.check_cell(e))
-            .is_some_and(|x| !x)
+            .is_some_and(|x| x)
     }
 
     fn check_cell(&self, coords: Coord) -> Option<bool> {
-        let indx = coords.into_index();
-        if indx > GRID_X * GRID_Y {
+        if coords.row >= GRID_X as u8 && coords.col > GRID_Y as u8 {
             return None;
         }
-        Some(self.maps.iter().all(|arr| arr[indx]))
+        let indx = coords.into_index();
+        Some(!self.maps.iter().any(|arr| arr[indx]))
     }
 
     fn direction(&mut self, dir: Direction) {
@@ -158,6 +160,7 @@ impl SnakeTrait for ArrSnake {
             *ind = true;
         }
         self.head = res;
+        self.size += with_food as usize;
         if !with_food {
             let tail_index = self.tail.into_index();
             for dir in Direction::iter() {

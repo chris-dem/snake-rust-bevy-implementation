@@ -23,7 +23,11 @@ pub(crate) enum EndScreenState {
     Lose,
 }
 
-fn draw_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn draw_ui(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    end_state: Res<State<EndScreenState>>,
+) {
     commands
         .spawn((
             StateScoped(AppState::EndScreen),
@@ -38,16 +42,30 @@ fn draw_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         ))
         .with_children(|builder| {
             builder.spawn(label_bundle(
-                "Snake AI".to_owned(),
+                "Game Over".to_owned(),
                 &asset_server,
                 Some(TEXT_COLOR_TITLE.into()),
                 Some(150.),
             ));
 
+            let label = match end_state.get() {
+                EndScreenState::Win => "You Won",
+                EndScreenState::Lose => "You Lost",
+            };
+
+            builder.spawn(label_bundle(
+                label.to_owned(),
+                &asset_server,
+                Some(TEXT_COLOR_TITLE.into()),
+                Some(100.),
+            ));
+
             builder
-                .spawn(draw_button("Start Game!".to_owned(), &asset_server))
+                .spawn(draw_button("Back to menu".to_owned(), &asset_server))
                 .observe(on_click);
         });
 }
 
-fn on_click(_: Trigger<Pointer<Click>>) {}
+fn on_click(_: Trigger<Pointer<Click>>, mut state: ResMut<NextState<AppState>>) {
+    state.set(AppState::Menu);
+}
