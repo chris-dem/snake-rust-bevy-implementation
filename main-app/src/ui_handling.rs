@@ -1,13 +1,22 @@
 use bevy::prelude::*;
 
-use crate::{constants::TEXT_COLOR, game_logic::GameState};
+use crate::{
+    AppState,
+    constants::TEXT_COLOR,
+    game_logic::{self, GameState},
+};
 
 pub(crate) struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, ui_setup)
-            .add_systems(Update, draw_direction.run_if(resource_changed::<GameState>));
+        app.add_systems(OnEnter(AppState::Game), ui_setup)
+            .add_systems(
+                Update,
+                draw_direction
+                    .run_if(resource_exists_and_changed::<GameState>)
+                    .run_if(in_state(AppState::Game)),
+            );
     }
 }
 
@@ -16,7 +25,6 @@ pub(crate) struct DirUi;
 
 fn ui_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((
-        // Accepts a `String` or any type that converts into a `String`, such as `&str`
         Text::new("->"),
         TextFont {
             // This font is loaded and will be used instead of the default font.

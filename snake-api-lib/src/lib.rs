@@ -11,7 +11,7 @@ pub mod common;
 pub mod snake;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum GameState {
+pub enum StepResult {
     Win,
     Lost,
     #[default]
@@ -28,7 +28,7 @@ impl Display for GameAPI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
         for i in 0..=GRID_Y {
-            write!(f, "{:^3}|", i )?;
+            write!(f, "{:^3}|", i)?;
         }
         writeln!(f)?;
         for i in 0..GRID_X {
@@ -94,9 +94,9 @@ impl GameAPI {
         }
     }
 
-    pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<GameState> {
+    pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<StepResult> {
         if !self.snake.is_next_valid() {
-            return Ok(GameState::Lost);
+            return Ok(StepResult::Lost);
         }
         let head = self.snake.next_step()?;
         let with_food = head == self.apples;
@@ -105,9 +105,9 @@ impl GameAPI {
             if let Some(coord) = self.snake.get_free_spot(rng) {
                 self.apples = coord;
             } else {
-                return Ok(GameState::Win);
+                return Ok(StepResult::Win);
             }
         }
-        Ok(GameState::Base)
+        Ok(StepResult::Base)
     }
 }

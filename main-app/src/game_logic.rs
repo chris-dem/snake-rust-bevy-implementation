@@ -4,14 +4,16 @@ use bevy::prelude::*;
 use bevy_rand::prelude::*;
 use bevy_smud::prelude::*; // Wait will add randomness and show you one sec
 use snake_api_lib::{
-    GameAPI,
+    GameAPI, StepResult,
     common::{Coord, Direction},
     snake::SnakeTrait,
 };
 
 use crate::{
+    AppState,
     common::Position,
     constants::{APPLE_COLOUR, BLOCK_Z, FRAME_MUL, SNAKE_COLOUR},
+    endscreen::EndScreenState,
     setup::WinDimension,
 };
 
@@ -27,9 +29,6 @@ pub(crate) struct SnakeTailComponent;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Component, Default)]
 pub(crate) struct NextEl(Option<Entity>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Resource, Default)]
-pub(crate) struct FoodConsumed(pub(crate) bool);
-
 #[derive(Debug, Clone, Copy, Resource)]
 pub(crate) struct GameState(pub(crate) GameAPI);
 
@@ -41,19 +40,46 @@ pub(crate) struct ShaderResourceSnake(pub(crate) Handle<Shader>);
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Time::<Fixed>::from_duration(Duration::from_secs_f64(0.5)))
-            .init_resource::<FoodConsumed>()
-            .add_systems(Startup, game_setup.after(crate::setup::setup))
-            .add_systems(Update, set_keyboard_dir)
-            .add_systems(FixedUpdate, step_snake)
-            .add_systems(FixedUpdate, (ui_snake).after(step_snake));
+            .add_systems(
+                OnEnter(AppState::Game),
+                game_setup.after(crate::setup::setup),
+            )
+            .add_systems(Update, set_keyboard_dir.run_if(in_state(AppState::Game)))
+            .add_systems(FixedUpdate, step_snake.run_if(in_state(AppState::Game)))
+            .add_systems(
+                FixedUpdate,
+                (ui_apple, ui_snake)
+                    .after(step_snake)
+                    .run_if(in_state(AppState::Game)),
+            )
+            .add_systems(OnExit(AppState::Game), cleanup_game);
     }
 }
 
-fn step_snake(mut snake_state: ResMut<GameState>, mut rng: GlobalEntropy<WyRand>) {
+fn cleanup_game(mut commands: Commands) {
+    commands.remove_resource::<GameState>();
+    commands.remove_resource::<ShaderResourceSnake>();
+}
+
+fn step_snake(
+    mut snake_state: ResMut<GameState>,
+    mut rng: GlobalEntropy<WyRand>,
+    mut next_state: ResMut<NextState<AppState>>,
+    mut next_state_sub: ResMut<NextState<EndScreenState>>,
+) {
     let s = match snake_state.0.next(&mut rng) {
         Ok(state) => state,
         Err(e) => panic!("{}", e.to_string()),
     };
+    if s != StepResult::Base {
+        next_state.set(AppState::EndScreen);
+        let next_sub = if s == StepResult::Win {
+            EndScreenState::Win
+        } else {
+            EndScreenState::Lose
+        };
+        next_state_sub.set(next_sub)
+    }
 }
 
 fn ui_snake(
@@ -114,13 +140,11 @@ fn ui_apple(
     snake_state: Res<GameState>,
     win_dim: Res<WinDimension>,
     sdf_res: Res<ShaderResourceSnake>,
-    mut apple_flag: ResMut<FoodConsumed>,
     query_pos: Single<(&Position, Entity), With<AppleComponent>>,
     mut commands: Commands,
 ) {
     let (apple_pos, apple_ent) = *query_pos;
     if apple_pos.0 != snake_state.0.apples {
-        // Redrarw
         commands.entity(apple_ent).despawn();
         commands
             .spawn(draw_cell(
@@ -130,7 +154,6 @@ fn ui_apple(
                 APPLE_COLOUR.into(),
             ))
             .insert(AppleComponent);
-        apple_flag.0 = true;
     }
 }
 
@@ -169,11 +192,12 @@ fn draw_cell(
             ..default()
         },
         Position(coord),
+        StateScoped(AppState::Game),
         Transform::from_xyz(trans.x, trans.y, BLOCK_Z),
     )
 }
 
-fn game_setup(
+pub(crate) fn game_setup(
     mut commands: Commands,
     mut shaders: ResMut<Assets<Shader>>,
     win_dim: Res<WinDimension>,

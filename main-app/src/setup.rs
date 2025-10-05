@@ -2,7 +2,7 @@ use bevy::{prelude::*, window::WindowResized};
 use bevy_smud::prelude::*;
 use snake_api_lib::common::{GRID_X, GRID_Y};
 
-use crate::{common::*, game_logic::ShaderResourceSnake};
+use crate::{AppState, common::*, game_logic::ShaderResourceSnake};
 
 #[derive(Debug, Clone, Copy, Resource, PartialEq)]
 pub struct WinDimension(f32, f32);
@@ -28,15 +28,21 @@ pub(crate) fn setup(mut commands: Commands, win: Single<&Window>) {
 }
 
 fn update_win(
+    app_state: Res<State<AppState>>,
     mut event_reader: EventReader<WindowResized>,
     mut win_dims: ResMut<WinDimension>,
-    mut snake_shader: ResMut<ShaderResourceSnake>,
+    mut snake_shader: Option<ResMut<ShaderResourceSnake>>,
     mut shaders: ResMut<Assets<Shader>>,
     mut query_shapes: Query<(&mut SmudShape, &mut Transform, &Position)>,
 ) {
     for WindowResized { width, height, .. } in event_reader.read() {
         win_dims.0 = *width;
         win_dims.1 = *height;
+        let snake_shader = match snake_shader {
+            Some(ref mut s) if *app_state == AppState::Game => s,
+            _ => continue,
+        };
+
         let new_handle = shaders.add_sdf_expr(win_dims.generate_sdf_string());
         snake_shader.0 = new_handle.clone();
         for (mut shape, mut trans, pos) in query_shapes.iter_mut() {
@@ -68,7 +74,7 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup)
-            .add_systems(Update, debug_grid)
+            .add_systems(Update, debug_grid.run_if(in_state(AppState::Game)))
             .add_systems(Update, update_win);
     }
 }
