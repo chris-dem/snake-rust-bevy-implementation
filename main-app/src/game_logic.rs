@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use bevy::{input::common_conditions::input_just_pressed, prelude::*};
+use bevy::prelude::*;
 use bevy_rand::prelude::*;
 use bevy_smud::prelude::*; // Wait will add randomness and show you one sec
 use snake_api_lib::{
     GameAPI,
-    common::{Coord, Direction, GRID_X, GRID_Y},
-    snake::{self, SnakeTrait},
+    common::{Coord, Direction},
+    snake::SnakeTrait,
 };
 
 use crate::{
@@ -163,7 +163,7 @@ fn draw_cell(
 
     (
         SmudShape {
-            color: color,
+            color,
             sdf: sdf_handle.clone(),
             frame: Frame::Quad(frame_dim),
             ..default()

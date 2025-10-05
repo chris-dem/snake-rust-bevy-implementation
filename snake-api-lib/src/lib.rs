@@ -26,7 +26,7 @@ pub struct GameAPI {
 
 impl Display for GameAPI {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "")?;
+        writeln!(f)?;
         for i in 0..=GRID_Y {
             write!(f, "{:^3}|", i )?;
         }
