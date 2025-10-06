@@ -188,7 +188,7 @@ impl GameAPI {
         self.set_speed();
         self.steps += 1;
         self.score += with_food as u128 * self.mode.to_score();
-        if self.steps % self.game_options.time_speed_del == 0 {
+        if self.steps.is_multiple_of(self.game_options.time_speed_del) {
             self.score = self.score.saturating_sub(1);
         }
         Ok(StepResult::Base)

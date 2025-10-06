@@ -29,7 +29,7 @@ pub(crate) fn setup(mut commands: Commands, win: Single<&Window>) {
 
 fn update_win(
     app_state: Res<State<AppState>>,
-    mut event_reader: EventReader<WindowResized>,
+    mut event_reader: MessageReader<WindowResized>,
     mut win_dims: ResMut<WinDimension>,
     mut snake_shader: Option<ResMut<ShaderResourceSnake>>,
     mut shaders: ResMut<Assets<Shader>>,
