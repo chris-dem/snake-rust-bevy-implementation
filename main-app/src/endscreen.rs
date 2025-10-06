@@ -30,7 +30,7 @@ fn draw_ui(
 ) {
     commands
         .spawn((
-            StateScoped(AppState::EndScreen),
+            DespawnOnExit(AppState::EndScreen),
             Node {
                 width: Val::Percent(100.),
                 height: Val::Percent(100.),
@@ -66,6 +66,6 @@ fn draw_ui(
         });
 }
 
-fn on_click(_: Trigger<Pointer<Click>>, mut state: ResMut<NextState<AppState>>) {
+fn on_click(_: On<Pointer<Click>>, mut state: ResMut<NextState<AppState>>) {
     state.set(AppState::Menu);
 }

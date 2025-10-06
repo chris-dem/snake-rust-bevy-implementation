@@ -19,7 +19,7 @@ impl Plugin for MenuPlugin {
 fn draw_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn((
-            StateScoped(AppState::Menu),
+            DespawnOnExit(AppState::Menu),
             Node {
                 width: Val::Percent(100.),
                 height: Val::Percent(100.),
@@ -43,6 +43,6 @@ fn draw_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 }
 
-fn on_click(_: Trigger<Pointer<Click>>, mut next_state: ResMut<NextState<AppState>>) {
+fn on_click(_: On<Pointer<Click>>, mut next_state: ResMut<NextState<AppState>>) {
     next_state.set(AppState::Game);
 }

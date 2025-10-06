@@ -61,7 +61,7 @@ pub(crate) fn draw_button(text: String, asset_server: &AssetServer) -> impl Bund
             align_items: AlignItems::Center,
             ..default()
         },
-        BorderColor(Color::WHITE),
+        BorderColor::all(Color::WHITE),
         BorderRadius::MAX,
         BackgroundColor(Color::BLACK),
         children![(

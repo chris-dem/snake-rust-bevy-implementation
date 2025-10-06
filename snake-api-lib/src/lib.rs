@@ -24,6 +24,7 @@ pub struct GameAPI {
     pub mode: Speed,
     pub steps: u128,
     pub score: u128,
+    pub game_options: GameOptions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -104,8 +105,21 @@ impl Display for GameAPI {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GameOptions {
+    time_speed_del: u128,
+}
+
+impl Default for GameOptions {
+    fn default() -> Self {
+        Self {
+            time_speed_del: ((GRID_X * GRID_Y) / 5) as u128,
+        }
+    }
+}
+
 impl GameAPI {
-    pub fn new(rng: Option<&mut dyn RngCore>) -> Self {
+    pub fn new(rng: Option<&mut dyn RngCore>, game_options: Option<GameOptions>) -> Self {
         let rng = match rng {
             None => &mut SmallRng::from_os_rng(),
             Some(rng) => rng,
@@ -127,6 +141,7 @@ impl GameAPI {
             steps: 0,
             score: 0,
             mode: Speed::default(),
+            game_options: game_options.unwrap_or_default(),
         }
     }
 
@@ -171,7 +186,11 @@ impl GameAPI {
             }
         }
         self.set_speed();
+        self.steps += 1;
         self.score += with_food as u128 * self.mode.to_score();
+        if self.steps % self.game_options.time_speed_del == 0 {
+            self.score = self.score.saturating_sub(1);
+        }
         Ok(StepResult::Base)
     }
 }

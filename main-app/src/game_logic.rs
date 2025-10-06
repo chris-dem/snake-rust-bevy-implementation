@@ -63,7 +63,7 @@ fn cleanup_game(mut commands: Commands) {
 
 fn step_snake(
     mut snake_state: ResMut<GameState>,
-    mut rng: GlobalEntropy<WyRand>,
+    mut rng: Single<&mut WyRand, With<GlobalRng>>,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_state_sub: ResMut<NextState<EndScreenState>>,
     mut speed: ResMut<Time<Fixed>>,
@@ -197,7 +197,7 @@ fn draw_cell(
             ..default()
         },
         Position(coord),
-        StateScoped(AppState::Game),
+        DespawnOnExit(AppState::Game),
         Transform::from_xyz(trans.x, trans.y, BLOCK_Z),
     )
 }
@@ -206,9 +206,9 @@ pub(crate) fn game_setup(
     mut commands: Commands,
     mut shaders: ResMut<Assets<Shader>>,
     win_dim: Res<WinDimension>,
-    mut rng: GlobalEntropy<WyRand>,
+    mut rng: Single<&mut WyRand, With<GlobalRng>>,
 ) {
-    let game_api = GameAPI::new(Some(&mut rng));
+    let game_api = GameAPI::new(Some(&mut rng), None);
     commands.insert_resource(GameState(game_api));
 
     let sdf = shaders.add_sdf_expr(win_dim.generate_sdf_string());

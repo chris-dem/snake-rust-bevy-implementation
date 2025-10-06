@@ -30,7 +30,6 @@ fn main() {
         .add_plugins((DefaultPlugins, SmudPlugin))
         .add_plugins(EntropyPlugin::<WyRand>::new())
         .init_state::<AppState>()
-        .enable_state_scoped_entities::<AppState>()
         .add_plugins((CameraPlugin, MenuPlugin, EndScreenPlugin))
         .add_plugins(GamePlugin)
         .add_plugins(ui_handling::UiPlugin)
