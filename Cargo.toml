@@ -1,10 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["main-app", "snake-api-lib"]
+members = ["main-app", "player-api-lib", "rl-evo-train", "snake-api-lib"]
 
 
 [profile.release]
 opt-level = "s"  # Maximum optimization (0-3, or 's' for size, 'z' for minimal size)
 
 
-
+[workspace.dependencies]
+itertools = { version = "^0.14" }
+ndarray = { version = "*"}

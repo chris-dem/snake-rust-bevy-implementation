@@ -5,6 +5,7 @@ use crate::{
     snake::{ArrSnake, SnakeTrait},
 };
 use anyhow::Result as ARes;
+use ndarray::prelude::*;
 use rand::prelude::*;
 
 pub mod common;
@@ -35,6 +36,12 @@ pub enum Speed {
     Hard,
     VeryHard,
     GodMode,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GameAPIBinaryRepr {
+    pub board: Array2<bool>, // X Y [Empty, Food, Snake, Head]
+    pub direction: Array1<bool>,
 }
 
 impl Display for Speed {
@@ -192,5 +199,9 @@ impl GameAPI {
             self.score = self.score.saturating_sub(1);
         }
         Ok(StepResult::Base)
+    }
+
+    fn one_hot_repr(&self) -> GameAPIBinaryRepr {
+        todo!()
     }
 }
