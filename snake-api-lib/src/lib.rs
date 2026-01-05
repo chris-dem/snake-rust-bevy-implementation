@@ -9,12 +9,20 @@ use ndarray::prelude::*;
 use rand::prelude::*;
 
 pub mod common;
+pub mod player_api;
 pub mod snake;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StepResult {
-    Win,
-    Lost,
+    Win {
+        num_steps: usize,
+    },
+    Lost {
+        num_steps: usize,
+        number_of_fruits: usize,
+        snake_size: usize,
+        level_reached: Speed,
+    },
     Base,
 }
 
@@ -24,6 +32,7 @@ pub struct GameAPI {
     pub apples: Coord,
     pub mode: Speed,
     pub steps: u128,
+    pub num_of_apples: u128,
     pub score: u128,
     pub game_options: GameOptions,
 }
@@ -180,28 +189,32 @@ impl GameAPI {
 
     pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<StepResult> {
         if !self.snake.is_next_valid() {
-            return Ok(StepResult::Lost);
+            return Ok(StepResult::Lost {
+                num_steps: self.steps as usize,
+                number_of_fruits: self.num_of_apples as usize,
+                snake_size: self.snake.size,
+                level_reached: self.mode,
+            });
         }
         let head = self.snake.next_step()?;
         let with_food = head == self.apples;
         self.snake.step(with_food)?;
         if with_food {
             if let Some(coord) = self.snake.get_free_spot(rng) {
+                self.num_of_apples += 1;
                 self.apples = coord;
             } else {
-                return Ok(StepResult::Win);
+                return Ok(StepResult::Win {
+                    num_steps: self.steps as usize,
+                });
             }
         }
-        self.set_speed();
         self.steps += 1;
+        self.set_speed();
         self.score += with_food as u128 * self.mode.to_score();
         if self.steps.is_multiple_of(self.game_options.time_speed_del) {
             self.score = self.score.saturating_sub(1);
         }
         Ok(StepResult::Base)
-    }
-
-    fn one_hot_repr(&self) -> GameAPIBinaryRepr {
-        todo!()
     }
 }

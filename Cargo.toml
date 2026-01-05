@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["main-app", "player-api-lib", "rl-evo-train", "snake-api-lib"]
+members = ["main-app", "rl-evo-train", "snake-api-lib"]
 
 
 [profile.release]
