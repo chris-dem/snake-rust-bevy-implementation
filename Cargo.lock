@@ -2408,7 +2408,7 @@ checksum = "fe6d2e5af09e8c8ad56c969f2157a3d4238cebc7c55f0a517728c38f7b200f81"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.1.14",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -6492,7 +6492,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6905,6 +6905,7 @@ name = "rl-evo-train"
 version = "0.1.0"
 dependencies = [
  "burn",
+ "snake-api-lib",
 ]
 
 [[package]]
@@ -7430,6 +7431,7 @@ dependencies = [
  "itertools 0.14.0",
  "ndarray 0.17.1",
  "rand 0.9.2",
+ "rayon",
  "strum 0.27.2",
  "strum_macros 0.27.2",
 ]

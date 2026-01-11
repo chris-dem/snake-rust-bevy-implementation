@@ -1,51 +1,52 @@
 use burn::{
     data::{dataloader::DataLoaderBuilder, dataset::vision::MnistDataset},
-    nn::loss::{CrossEntropyLoss, CrossEntropyLossConfig},
+    nn::loss::{CrossEntropyLoss, CrossEntropyLossConfig, HuberLossConfig},
     optim::AdamConfig,
     prelude::*,
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
     train::{
-        ClassificationOutput, LearnerBuilder, TrainOutput, TrainStep, ValidStep,
+        ClassificationOutput, LearnerBuilder, RegressionOutput, TrainOutput, TrainStep, ValidStep,
         metric::{AccuracyMetric, LossMetric},
     },
 };
 
 use crate::{
-    data::{MnistBatch, MnistBatcher},
+    data::{EpisodeSim, SnakeRLBatcher},
     model::{Model, ModelConfig},
 };
 
-impl<B: Backend> Model<B> {
-    pub fn forward_classification(
-        &self,
-        images: Tensor<B, 3>,
-        targets: Tensor<B, 1, Int>,
-    ) -> ClassificationOutput<B> {
-        let output = self.forward(images);
-        let loss = CrossEntropyLossConfig::new()
-            .init(&output.device())
-            .forward(output.clone(), targets.clone());
+struct GameInstanceModel;
 
-        ClassificationOutput::new(loss, output, targets)
+impl<B: Backend> Model<B> {
+    pub fn forward_classification(&self, batch: EpisodeSim<B>) -> RegressionOutput<B> {
+        // let _ = self.forward(images);
+        todo!("Calculate the forward propagations");
+        todo!("calculate the loss (r_(t+1) - Q(s_t+1,a), current state)");
+        // Just subtract, no MAE
+        // needed
+
+        // let loss = HuberLossConfig::new(0.5)
+        //     .init()
+        //     .forward(output.clone(), targets.clone());
     }
 }
 
-impl<B: AutodiffBackend> TrainStep<MnistBatch<B>, ClassificationOutput<B>> for Model<B> {
-    fn step(&self, batch: MnistBatch<B>) -> TrainOutput<ClassificationOutput<B>> {
-        let item = self.forward_classification(batch.images, batch.targets);
-
+impl<B: AutodiffBackend> TrainStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
+    fn step(&self, batch: EpisodeSim<B>) -> TrainOutput<RegressionOutput<B>> {
+        let item = self.forward_classification(batch);
+        todo!("Apply the TD learning algorithm");
         TrainOutput::new(self, item.loss.backward(), item)
     }
 }
 
-impl<B: Backend> ValidStep<MnistBatch<B>, ClassificationOutput<B>> for Model<B> {
-    fn step(&self, batch: MnistBatch<B>) -> ClassificationOutput<B> {
-        self.forward_classification(batch.images, batch.targets)
+impl<B: Backend> ValidStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
+    fn step(&self, batch: EpisodeSim<B>) -> RegressionOutput<B> {
+        self.forward_classification(batch)
     }
 }
 
-#[derive(Config)]
+#[derive(Debug, Config)]
 pub struct TrainingConfig {
     pub model: ModelConfig,
     pub optimizer: AdamConfig,
@@ -66,46 +67,62 @@ fn create_artifact_dir(artifact_dir: &str) {
     std::fs::create_dir_all(artifact_dir).ok();
 }
 
-pub fn train<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device) {
-    create_artifact_dir(artifact_dir);
-    config
-        .save(format!("{artifact_dir}/config.json"))
-        .expect("Config should be saved successfully");
+pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device) {
+    // Create the configuration.
+    let config_model = ModelConfig::new(10, 1024);
+    let config_optimizer = AdamConfig::new();
+    let config = ModelConfig::new(config_model, config_optimizer);
 
-    B::seed(config.seed);
+    B::seed(&device, config.seed);
 
-    let batcher = MnistBatcher::default();
+    // Create the model and optimizer.
+    let mut model = config.model.init::<B>(&device);
+    let mut optim = config.optimizer.init();
 
-    let dataloader_train = DataLoaderBuilder::new(batcher.clone())
-        .batch_size(config.batch_size)
-        .shuffle(config.seed)
-        .num_workers(config.num_workers)
-        .build(MnistDataset::train());
+    let batcher = SnakeRLBatcher::default();
+    // Iterate over our training and validation loop for X epochs.
+    for epoch in 1..config.num_epochs + 1 {
+        // Implement our training loop.
+        for (iteration, batch) in dataloader_train.iter().enumerate() {
+            let output = model.forward(batch.images);
+            let loss = CrossEntropyLoss::new(None, &output.device())
+                .forward(output.clone(), batch.targets.clone());
+            let accuracy = accuracy(output, batch.targets);
 
-    let dataloader_test = DataLoaderBuilder::new(batcher.clone())
-        .batch_size(config.batch_size)
-        .shuffle(config.seed)
-        .num_workers(config.num_workers)
-        .build(MnistDataset::test());
+            println!(
+                "[Train - Epoch {} - Iteration {}] Loss {:.3} | Accuracy {:.3} %",
+                epoch,
+                iteration,
+                loss.clone().into_scalar(),
+                accuracy,
+            );
 
-    let learner = LearnerBuilder::new(artifact_dir)
-        .metric_train_numeric(AccuracyMetric::new())
-        .metric_valid_numeric(AccuracyMetric::new())
-        .metric_train_numeric(LossMetric::new())
-        .metric_valid_numeric(LossMetric::new())
-        .with_file_checkpointer(CompactRecorder::new())
-        .devices(vec![device.clone()])
-        .num_epochs(config.num_epochs)
-        .summary()
-        .build(
-            config.model.init::<B>(&device),
-            config.optimizer.init(),
-            config.learning_rate,
-        );
+            // Gradients for the current backward pass
+            let grads = loss.backward();
+            // Gradients linked to each parameter of the model.
+            let grads = GradientsParams::from_grads(grads, &model);
+            // Update the model using the optimizer.
+            model = optim.step(config.lr, model, grads);
+        }
 
-    let model_trained = learner.fit(dataloader_train, dataloader_test);
+        // Get the model without autodiff.
+        let model_valid = model.valid();
 
-    model_trained
-        .save_file(format!("{artifact_dir}/model"), &CompactRecorder::new())
-        .expect("Trained Model should be saved successfully");
+        // Implement our validation loop.
+        for (iteration, batch) in dataloader_test.iter().enumerate() {
+            let output = model_valid.forward(batch.images);
+            let loss = CrossEntropyLoss::new(None, &output.device())
+                .forward(output.clone(), batch.targets.clone());
+            let accuracy = accuracy(output, batch.targets);
+
+            println!(
+                "[Valid - Epoch {} - Iteration {}] Loss {} | Accuracy {}",
+                epoch,
+                iteration,
+                loss.clone().into_scalar(),
+                accuracy,
+            );
+        }
+    }
+    //
 }

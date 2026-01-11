@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 burn = { version = "~0.19", features = ["std", "tui", "train", "vision", "wgpu", "fusion"], default-features = false }
+snake-api-lib = { path = "../snake-api-lib" }
+
