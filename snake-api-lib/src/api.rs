@@ -60,10 +60,7 @@ pub enum Speed {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct GameAPIBinaryRepr {
-    pub board: Array2<bool>, // X Y [Empty, Food, Snake, Head]
-    pub direction: Array1<bool>,
-}
+pub struct GameAPIBinaryRepr(pub Array2<usize>); // X Y [Empty, Food, Snake, Head]
 
 impl Display for Speed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -149,7 +146,7 @@ impl Default for GameOptions {
 impl GameAPI {
     pub fn new(rng: Option<&mut dyn RngCore>, game_options: Option<GameOptions>) -> Self {
         let rng = match rng {
-            None => &mut SmallRng::from_os_rng(),
+            None => &mut SmallRng::from_rng(&mut rand::rng()),
             Some(rng) => rng,
         };
         let mid = Coord::middle();
@@ -229,5 +226,29 @@ impl GameAPI {
             self.score = self.score.saturating_sub(1);
         }
         Ok(StepResult::Base)
+    }
+
+    pub fn to_game_repr(&self) -> GameAPIBinaryRepr {
+        let a = Array2::from_shape_fn((GRID_X, GRID_Y), |(row, col)| {
+            let pos = Coord {
+                row: row as u8,
+                col: col as u8,
+            };
+            match self
+                .get_pos(pos)
+                .expect("Expect to iterate over correct range")
+            {
+                Cell::Empty => 0,
+                Cell::Snake => {
+                    if pos == self.snake.head {
+                        1
+                    } else {
+                        2
+                    }
+                }
+                Cell::Apple => 3,
+            }
+        });
+        GameAPIBinaryRepr(a)
     }
 }

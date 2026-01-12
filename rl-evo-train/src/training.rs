@@ -1,7 +1,8 @@
 use burn::{
     data::{dataloader::DataLoaderBuilder, dataset::vision::MnistDataset},
+    module::AutodiffModule,
     nn::loss::{CrossEntropyLoss, CrossEntropyLossConfig, HuberLossConfig},
-    optim::AdamConfig,
+    optim::{AdamConfig, GradientsParams, Optimizer},
     prelude::*,
     record::CompactRecorder,
     tensor::backend::AutodiffBackend,
@@ -12,39 +13,25 @@ use burn::{
 };
 
 use crate::{
-    data::{EpisodeSim, SnakeRLBatcher},
+    data::EpisodeSim,
     model::{Model, ModelConfig},
 };
 
 struct GameInstanceModel;
 
-impl<B: Backend> Model<B> {
-    pub fn forward_classification(&self, batch: EpisodeSim<B>) -> RegressionOutput<B> {
-        // let _ = self.forward(images);
-        todo!("Calculate the forward propagations");
-        todo!("calculate the loss (r_(t+1) - Q(s_t+1,a), current state)");
-        // Just subtract, no MAE
-        // needed
-
-        // let loss = HuberLossConfig::new(0.5)
-        //     .init()
-        //     .forward(output.clone(), targets.clone());
-    }
-}
-
-impl<B: AutodiffBackend> TrainStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
-    fn step(&self, batch: EpisodeSim<B>) -> TrainOutput<RegressionOutput<B>> {
-        let item = self.forward_classification(batch);
-        todo!("Apply the TD learning algorithm");
-        TrainOutput::new(self, item.loss.backward(), item)
-    }
-}
-
-impl<B: Backend> ValidStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
-    fn step(&self, batch: EpisodeSim<B>) -> RegressionOutput<B> {
-        self.forward_classification(batch)
-    }
-}
+// impl<B: AutodiffBackend> TrainStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
+//     fn step(&self, batch: EpisodeSim<B>) -> TrainOutput<RegressionOutput<B>> {
+//         let item = self.forward_classification(batch);
+//         todo!("Apply the TD learning algorithm");
+//         TrainOutput::new(self, item.loss.backward(), item)
+//     }
+// }
+//
+// impl<B: Backend> ValidStep<EpisodeSim<B>, RegressionOutput<B>> for Model<B> {
+//     fn step(&self, batch: EpisodeSim<B>) -> RegressionOutput<B> {
+//         self.forward_classification(batch)
+//     }
+// }
 
 #[derive(Debug, Config)]
 pub struct TrainingConfig {
@@ -71,7 +58,7 @@ pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, devic
     // Create the configuration.
     let config_model = ModelConfig::new(10, 1024);
     let config_optimizer = AdamConfig::new();
-    let config = ModelConfig::new(config_model, config_optimizer);
+    let config = TrainingConfig::new(config_model, config_optimizer);
 
     B::seed(&device, config.seed);
 
@@ -83,10 +70,10 @@ pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, devic
     // Iterate over our training and validation loop for X epochs.
     for epoch in 1..config.num_epochs + 1 {
         // Implement our training loop.
-        for (iteration, batch) in dataloader_train.iter().enumerate() {
+        for (iteration, batch) in dataloader_train.iter(&model).enumerate() {
+            // TODO
             let output = model.forward(batch.images);
-            let loss = CrossEntropyLoss::new(None, &output.device())
-                .forward(output.clone(), batch.targets.clone());
+            let loss = output;
             let accuracy = accuracy(output, batch.targets);
 
             println!(
@@ -102,14 +89,14 @@ pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, devic
             // Gradients linked to each parameter of the model.
             let grads = GradientsParams::from_grads(grads, &model);
             // Update the model using the optimizer.
-            model = optim.step(config.lr, model, grads);
+            model = optim.step(config.learning_rate, model, grads);
         }
 
         // Get the model without autodiff.
         let model_valid = model.valid();
 
         // Implement our validation loop.
-        for (iteration, batch) in dataloader_test.iter().enumerate() {
+        for (iteration, batch) in dataloader_test.iter(model_valid).enumerate() {
             let output = model_valid.forward(batch.images);
             let loss = CrossEntropyLoss::new(None, &output.device())
                 .forward(output.clone(), batch.targets.clone());

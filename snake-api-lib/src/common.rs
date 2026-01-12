@@ -4,8 +4,8 @@ use std::{
 };
 use strum_macros::EnumIter;
 
-pub const GRID_X: usize = 4;
-pub const GRID_Y: usize = 4;
+pub const GRID_X: usize = 32;
+pub const GRID_Y: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {
@@ -72,6 +72,17 @@ pub enum Direction {
     Down = 3,
 }
 
+impl Direction {
+    pub fn inverse(self) -> Self {
+        match self {
+            Self::Up => Self::Down,
+            Self::Right => Self::Left,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
+        }
+    }
+}
+
 impl Display for Direction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let c = match self {
@@ -81,6 +92,18 @@ impl Display for Direction {
             Self::Left => '←',
         };
         write!(f, "{c}")
+    }
+}
+
+impl From<usize> for Direction {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => Self::Up,
+            1 => Self::Right,
+            2 => Self::Down,
+            3 => Self::Left,
+            _ => unreachable!(),
+        }
     }
 }
 
