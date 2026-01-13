@@ -2,7 +2,6 @@
 pub mod data;
 pub mod model;
 pub mod training;
-
 use crate::{model::ModelConfig, training::TrainingConfig};
 use burn::{
     backend::{Autodiff, Wgpu, wgpu::WgpuDevice},

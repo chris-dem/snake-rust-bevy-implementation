@@ -60,7 +60,7 @@ pub enum Speed {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct GameAPIBinaryRepr(pub Array2<usize>); // X Y [Empty, Food, Snake, Head]
+pub struct GameAPIBinaryRepr(pub Array2<i32>); // X Y [Empty, Food, Snake, Head]
 
 impl Display for Speed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

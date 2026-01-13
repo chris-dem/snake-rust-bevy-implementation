@@ -13,8 +13,7 @@ use burn::{
 };
 
 use crate::{
-    data::EpisodeSim,
-    model::{Model, ModelConfig},
+    data::DatasetGenerator, model::{Model, ModelConfig}
 };
 
 struct GameInstanceModel;
@@ -54,7 +53,7 @@ fn create_artifact_dir(artifact_dir: &str) {
     std::fs::create_dir_all(artifact_dir).ok();
 }
 
-pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device) {
+pub fn run<B: AutodiffBackend>(artifact_dir: &str, config: TrainingConfig, device: B::Device, dg: DatasetGeneratorBuilder) {
     // Create the configuration.
     let config_model = ModelConfig::new(10, 1024);
     let config_optimizer = AdamConfig::new();

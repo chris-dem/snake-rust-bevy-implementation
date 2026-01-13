@@ -12,11 +12,10 @@ use burn::{
 use itertools::Itertools;
 // use itertools::Itertools;
 use rand::prelude::*;
-use serde::{Deserialize, Serialize};
 use snake_api_lib::{
-    api::{GameAPI, GameAPIBinaryRepr, GameAPIBuilder},
+    api::{GameAPI, GameAPIBinaryRepr},
     common::{Direction, GRID_X, GRID_Y},
-    simulator::{PlayerTrait, SimulationStep, SimulationStepReward, Simulator, SimulatorOptions},
+    simulator::{PlayerTrait, SimulationStep, SimulationStepReward, Simulator},
 };
 use strum::IntoEnumIterator;
 
@@ -24,30 +23,19 @@ use crate::model::{Model, StateRepr};
 
 #[derive(Debug)]
 pub(crate) struct DatasetGenerator {
-    data_gen: DatasetGeneratorConfig,
+    gen_config: DatasetGeneratorConfig,
+    rew_config: RewardConfig,
+    simulator: Simulator,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct DatasetGeneratorConfig {
-    pub sim_config: SimulationConfig,
-    pub rew_config: RewardConfig,
+#[derive(Debug, Clone, Copy)]
+pub struct DatasetGeneratorConfig {
+    pub number_eps: usize,
+    pub ep_limit: usize,
     pub batch_size: usize,
 }
 
-impl DatasetGeneratorConfig {
-    fn build(self, api_builder: GameAPIBuilder) -> DatasetGenerator {
-        DatasetGenerator { data_gen: self }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SimulationConfig {
-    pub number_episodes: usize,
-    pub episode_limit: Option<usize>,
-    pub eps_expl: f32,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct RewardConfig {
     pub step_rew: f32,
     pub fruit_rew: f32,
@@ -124,6 +112,18 @@ impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
 }
 
 impl DatasetGenerator {
+    fn new(
+        gen_config: DatasetGeneratorConfig,
+        rew_config: RewardConfig,
+        simulator: Simulator,
+    ) -> Self {
+        Self {
+            gen_config,
+            simulator,
+            rew_config,
+        }
+    }
+
     fn iter_with_model<T, B: Backend>(
         &self,
         player: &mut PlayerModel<B>,
@@ -132,15 +132,9 @@ impl DatasetGenerator {
     where
         T: RngCore + Clone + SeedableRng + Send + Sync,
     {
-        let p = self.data_gen.sim_config.number_episodes;
-        let sim = Simulator::new(
-            GameAPIBuilder::default(),
-            SimulatorOptions {
-                number_of_iterations: self.data_gen.sim_config.episode_limit.unwrap_or(10_000),
-            },
-        );
+        let p = self.gen_config.number_eps;
         let mut sims = (0..p)
-            .map(|_| sim.simulation(player, with_rng))
+            .map(|_| self.simulator.simulation(player, with_rng))
             .collect::<ARes<Vec<_>>>()
             .expect("Should compile")
             .into_iter()
@@ -150,7 +144,7 @@ impl DatasetGenerator {
         // let prior_setting = player.active_mode;
         // player.active_mode = false;
         let batches = sims
-            .chunks(self.data_gen.batch_size)
+            .chunks(self.gen_config.batch_size)
             .map(|c| self.batch_sims(c.iter().cloned(), player))
             .collect_vec();
         batches.into_iter()
@@ -179,12 +173,12 @@ impl DatasetGenerator {
             v_direction.push(direction as i32);
             match reward {
                 SimulationStepReward::Won => {
-                    v_reward.push(self.data_gen.rew_config.fruit_rew);
-                    v_next_state_qual.push(self.data_gen.rew_config.win_rew);
+                    v_reward.push(self.rew_config.fruit_rew);
+                    v_next_state_qual.push(self.rew_config.win_rew);
                 }
                 SimulationStepReward::Lost => {
-                    v_reward.push(self.data_gen.rew_config.step_rew);
-                    v_next_state_qual.push(self.data_gen.rew_config.lose_rew);
+                    v_reward.push(self.rew_config.step_rew);
+                    v_next_state_qual.push(self.rew_config.lose_rew);
                 }
                 SimulationStepReward::Step => {
                     let st: StateRepr<B> = (
@@ -192,7 +186,7 @@ impl DatasetGenerator {
                         player.device,
                     )
                         .into();
-                    v_reward.push(self.data_gen.rew_config.step_rew);
+                    v_reward.push(self.rew_config.step_rew);
                     let out = player.model.forward(st).argmax(0);
                     let el = out.max().into_scalar().elem::<f32>();
                     v_next_state_qual.push(el);
@@ -205,14 +199,13 @@ impl DatasetGenerator {
                         .into();
                     let out = player.model.forward(st).argmax(0);
                     let el = out.max().into_scalar().elem::<f32>();
-                    v_reward.push(self.data_gen.rew_config.fruit_rew);
+                    v_reward.push(self.rew_config.fruit_rew);
                     v_next_state_qual.push(el);
                 }
             }
         }
 
         let b_size = v_direction.len();
-        assert!(b_size == v_reward.len() && b_size == v_next_state_qual.len());
         BatchedSimulationStep {
             snapshot: Tensor::stack(v_snapshot, 0),
             direction: Tensor::from_data(TensorData::new(v_direction, [b_size]), player.device),

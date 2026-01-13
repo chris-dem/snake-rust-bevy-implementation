@@ -1,5 +1,8 @@
 use burn::nn::{
-    BatchNorm, BatchNormConfig, Dropout, DropoutConfig, Gelu, Linear, LinearConfig, PaddingConfig2d, Relu, conv::{Conv2d, Conv2dConfig}, pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig, MaxPool2d, MaxPool2dConfig}
+    BatchNorm, BatchNormConfig, Dropout, DropoutConfig, Gelu, Linear, LinearConfig,
+    PaddingConfig2d, Relu,
+    conv::{Conv2d, Conv2dConfig},
+    pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig, MaxPool2d, MaxPool2dConfig},
 };
 use burn::prelude::*;
 

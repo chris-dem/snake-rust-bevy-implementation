@@ -11,5 +11,4 @@ opt-level = "s"  # Maximum optimization (0-3, or 's' for size, 'z' for minimal s
 ndarray = { version = "*"}
 rand = { version = "0.10.0-rc.6" }
 strum = { version = "0.27.2", features = ["strum_macros"] }
-strum_macros = "0.27.2"
 itertools = "0.14.0"
