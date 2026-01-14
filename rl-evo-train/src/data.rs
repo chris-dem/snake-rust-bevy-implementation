@@ -7,8 +7,9 @@ use burn::{
         dataset::vision::MnistItem,
     },
     prelude::*,
-    tensor::ops::BoolTensor,
+    tensor::{backend::AutodiffBackend, ops::BoolTensor},
 };
+
 use itertools::Itertools;
 // use itertools::Itertools;
 use rand::prelude::*;
@@ -27,7 +28,7 @@ pub(crate) struct DatasetGenerator {
     data_gen: DatasetGeneratorConfig,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub(crate) struct DatasetGeneratorConfig {
     pub sim_config: SimulationConfig,
     pub rew_config: RewardConfig,
@@ -35,42 +36,36 @@ pub(crate) struct DatasetGeneratorConfig {
 }
 
 impl DatasetGeneratorConfig {
-    fn build(self, api_builder: GameAPIBuilder) -> DatasetGenerator {
+    pub fn build(self) -> DatasetGenerator {
         DatasetGenerator { data_gen: self }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct SimulationConfig {
     pub number_episodes: usize,
     pub episode_limit: Option<usize>,
-    pub eps_expl: f32,
+    pub eps_expl: f64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct RewardConfig {
     pub step_rew: f32,
     pub fruit_rew: f32,
     pub win_rew: f32,
     pub lose_rew: f32,
+    pub gamma_factor: f32,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct PlayerModel<'a, 'b, B: Backend> {
-    model: &'a Model<B>,
-    eps: f64,
-    device: &'b B::Device,
-    active_mode: bool,
+pub struct PlayerModel<'a, 'b, B: Backend> {
+    pub model: &'a Model<B>,
+    pub eps: f64,
+    pub device: &'b B::Device,
+    pub active_mode: bool,
 }
 
 impl<'a, 'b, B: Backend> PlayerModel<'a, 'b, B> {
-    fn update_model<'c>(self, new_model: &'c Model<B>) -> PlayerModel<'c, 'b, B> {
-        PlayerModel {
-            model: new_model,
-            ..self
-        }
-    }
-
     fn set_mode(&mut self, is_training: bool) {
         self.active_mode = is_training;
     }
@@ -84,7 +79,7 @@ impl<B: Backend> From<(GameAPIBinaryRepr, &B::Device)> for StateRepr<B> {
     fn from(value: (GameAPIBinaryRepr, &B::Device)) -> Self {
         let (GameAPIBinaryRepr(arr), dev) = value;
         let arr = arr
-            .to_shape((1, GRID_X, GRID_Y))
+            .to_shape([1, GRID_X, GRID_Y])
             .expect("Padding with one should nof affect it");
         let arr = arr
             .as_standard_layout()
@@ -99,13 +94,13 @@ impl<B: Backend> From<(GameAPIBinaryRepr, &B::Device)> for StateRepr<B> {
 }
 
 impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
-    fn choose_dir(&mut self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction {
+    fn choose_dir(&self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction {
         let dir = game_instance.snake.direction;
         let mut dir_vec = Direction::iter().enumerate().collect_vec();
         dir_vec.remove(dir.inverse() as usize);
         if self.active_mode && with_rng.random_bool(self.eps) {
-            unimplemented!("Eps-greedy not implemented due to dropouts");
-            // return dir_vec.choose(with_rng).unwrap().1;
+            // unimplemented!("Eps-greedy not implemented due to dropouts");
+            return dir_vec.choose(with_rng).unwrap().1;
         }
         let state_repr: StateRepr<B> = (game_instance.to_game_repr(), self.device).into();
         let m = Tensor::<B, 1, Int>::from_data(
@@ -124,44 +119,51 @@ impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
 }
 
 impl DatasetGenerator {
-    fn iter_with_model<T, B: Backend>(
+    pub fn iter_with_model<B: Backend, T>(
         &self,
-        player: &mut PlayerModel<B>,
+        model: &Model<B>,
+        device: &B::Device,
         with_rng: &mut T,
+        active_mode: bool,
     ) -> impl Iterator<Item = BatchedSimulationStep<B>>
     where
         T: RngCore + Clone + SeedableRng + Send + Sync,
     {
         let p = self.data_gen.sim_config.number_episodes;
+        let player = PlayerModel {
+            model,
+            eps: self.data_gen.sim_config.eps_expl,
+            device,
+            active_mode,
+        };
         let sim = Simulator::new(
             GameAPIBuilder::default(),
             SimulatorOptions {
                 number_of_iterations: self.data_gen.sim_config.episode_limit.unwrap_or(10_000),
             },
         );
-        let mut sims = (0..p)
-            .map(|_| sim.simulation(player, with_rng))
+
+        let mut sims = tqdm::tqdm((0..p).map(|_| sim.simulation(&player, with_rng)))
             .collect::<ARes<Vec<_>>>()
             .expect("Should compile")
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
         sims.shuffle(with_rng);
-        // let prior_setting = player.active_mode;
-        // player.active_mode = false;
         let batches = sims
             .chunks(self.data_gen.batch_size)
-            .map(|c| self.batch_sims(c.iter().cloned(), player))
+            .map(|c| self.batch_sims(device, c.iter().cloned(), &player))
             .collect_vec();
         batches.into_iter()
     }
 
     fn batch_sims<B: Backend>(
         &self,
+        device: &B::Device,
         els: impl Iterator<Item = SimulationStep>,
-        player: &mut PlayerModel<B>,
+        player: &PlayerModel<B>,
     ) -> BatchedSimulationStep<B> {
-        let mut v_snapshot: Vec<Tensor<B, 3, Float>> = vec![];
+        let mut v_snapshot: Vec<Tensor<B, 4, Float>> = vec![];
         let mut v_direction = vec![];
         let mut v_reward = vec![];
         let mut v_next_state_qual = vec![];
@@ -172,10 +174,8 @@ impl DatasetGenerator {
             next_state,
         } in els
         {
-            v_snapshot.push(Tensor::from_data(
-                TensorData::new(snapshot.0.into_raw_vec_and_offset().0, [GRID_X, GRID_Y, 4]),
-                player.device,
-            ));
+            let (StateRepr(snap)): StateRepr<B> = (snapshot, device).into();
+            v_snapshot.push(snap);
             v_direction.push(direction as i32);
             match reward {
                 SimulationStepReward::Won => {
@@ -188,7 +188,7 @@ impl DatasetGenerator {
                 }
                 SimulationStepReward::Step => {
                     let st: StateRepr<B> = (
-                        next_state.expect("Sohuld have next state in step"),
+                        next_state.expect("Should have next state in step"),
                         player.device,
                     )
                         .into();
@@ -213,8 +213,9 @@ impl DatasetGenerator {
 
         let b_size = v_direction.len();
         assert!(b_size == v_reward.len() && b_size == v_next_state_qual.len());
+        let snaps = Tensor::cat(v_snapshot, 0);
         BatchedSimulationStep {
-            snapshot: Tensor::stack(v_snapshot, 0),
+            snapshot: snaps,
             direction: Tensor::from_data(TensorData::new(v_direction, [b_size]), player.device),
             reward: Tensor::from_data(TensorData::new(v_reward, [b_size]), player.device),
             next_state_qual: Tensor::from_data(
@@ -226,7 +227,7 @@ impl DatasetGenerator {
 }
 
 pub struct BatchedSimulationStep<B: Backend> {
-    pub snapshot: Tensor<B, 3, Float>,
+    pub snapshot: Tensor<B, 4, Float>,
     pub direction: Tensor<B, 1, Int>,
     pub reward: Tensor<B, 1, Float>,
     pub next_state_qual: Tensor<B, 1, Float>,

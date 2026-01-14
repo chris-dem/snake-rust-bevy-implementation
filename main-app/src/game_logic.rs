@@ -2,15 +2,17 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_rand::prelude::*;
-use bevy_smud::prelude::*; // Wait will add randomness and show you one sec
+use bevy_smud::prelude::*;
+use rand::prelude::*;
+use rand_chacha::rand_core::RngCore;
 use snake_api_lib::{
-    GameAPI, StepResult,
+    api::{GameAPI, StepResult},
     common::{Coord, Direction},
-    snake::SnakeTrait,
 };
 
 use crate::{
     AppState,
+    bot_logic::set_dir_agent,
     common::Position,
     constants::{APPLE_COLOUR, BLOCK_Z, FRAME_MUL, SNAKE_COLOUR},
     endscreen::EndScreenState,
@@ -45,7 +47,11 @@ impl Plugin for GamePlugin {
                 game_setup.after(crate::setup::setup),
             )
             .add_systems(Update, set_keyboard_dir.run_if(in_state(AppState::Game)))
-            .add_systems(FixedUpdate, step_snake.run_if(in_state(AppState::Game)))
+            .add_systems(
+                FixedUpdate,
+                (set_dir_agent, step_snake).run_if(in_state(AppState::Game)),
+                // (step_snake).run_if(in_state(AppState::Game)),
+            )
             .add_systems(
                 FixedUpdate,
                 (ui_apple, ui_snake)
@@ -61,21 +67,24 @@ fn cleanup_game(mut commands: Commands) {
     commands.remove_resource::<ShaderResourceSnake>();
 }
 
-fn step_snake(
+pub fn step_snake(
     mut snake_state: ResMut<GameState>,
-    mut rng: Single<&mut WyRand, With<GlobalRng>>,
+    mut rng: Single<&mut ChaCha8Rng, With<GlobalRng>>,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_state_sub: ResMut<NextState<EndScreenState>>,
     mut speed: ResMut<Time<Fixed>>,
 ) {
-    let s = snake_state.0.next(&mut rng).unwrap();
+    let s = snake_state
+        .0
+        .next(&mut SmallRng::seed_from_u64(rng.next_u64()))
+        .unwrap();
     speed.set_timestep(
         Duration::try_from_secs_f32(snake_state.0.mode.to_time_speed())
             .expect("Should be valid time"),
     );
     if s != StepResult::Base {
         next_state.set(AppState::EndScreen);
-        let next_sub = if s == StepResult::Win {
+        let next_sub = if matches!(s, StepResult::Win { .. }) {
             EndScreenState::Win
         } else {
             EndScreenState::Lose
@@ -124,9 +133,7 @@ fn ui_snake(
         head.0.0 = Some(ent);
     }
 
-    let Ok((tail_next, tail_ent, tail_pos)) = query_pos.single() else {
-        panic!("Tail missing");
-    };
+    let (tail_next, tail_ent, tail_pos) = query_pos.iter().next().expect("Tail to exist");
     if tail_pos.0 != snake_state.0.snake.tail {
         // If food not eaten
         if let Some(next_ent) = tail_next.0 {
@@ -171,7 +178,7 @@ fn set_keyboard_dir(mut res: ResMut<GameState>, key: Res<ButtonInput<KeyCode>>) 
     } else {
         return;
     };
-    res.0.snake.direction(dir);
+    res.0.update_direction(dir);
 }
 
 fn draw_cell(
@@ -203,9 +210,8 @@ pub(crate) fn game_setup(
     mut commands: Commands,
     mut shaders: ResMut<Assets<Shader>>,
     win_dim: Res<WinDimension>,
-    mut rng: Single<&mut WyRand, With<GlobalRng>>,
 ) {
-    let game_api = GameAPI::new(Some(&mut rng), None);
+    let game_api = GameAPI::new(None, None);
     commands.insert_resource(GameState(game_api));
 
     let sdf = shaders.add_sdf_expr(win_dim.generate_sdf_string());

@@ -33,6 +33,13 @@ impl Coord {
         (self.row as usize) * GRID_Y + self.col as usize
     }
 
+    pub fn from_index(other: usize) -> Self {
+        Self {
+            row: (other % GRID_Y) as u8,
+            col: (other / GRID_Y) as u8,
+        }
+    }
+
     pub fn middle() -> Self {
         Self {
             row: GRID_Y as u8 / 2,

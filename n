@@ -8,12 +8,11 @@ use burn::{
     },
     tensor::{activation::gelu, backend::AutodiffBackend},
 };
-use itertools::Itertools;
 
 #[derive(Debug, Module)]
 pub struct ResidualBlock<B: Backend, const D: usize> {
     pub nets: [Conv2d<B>; D],
-    pub norms: [BatchNorm<B>; D],
+    pub norms: [Conv2d<B>; D],
 }
 
 #[derive(Debug, Module)]
@@ -28,23 +27,6 @@ pub struct Model<B: Backend> {
     lin1: Linear<B>,
     lin2: Linear<B>,
     act: Gelu,
-}
-
-impl<B: Backend, const D: usize> ResidualBlock<B, D> {
-    fn new([in_dim, middle_dim, out_dim]: [usize ;3],device: &B::Device) -> ResidualBlock<B, D> {
-       let c_start = Conv2dConfig::new([in_dim, middle_dim], [3,3]);
-        let c_mid = Conv2dConfig::new([middle_dim, middle_dim], [3,3]);
-        let c_end = Conv2dConfig::new([middle_dim, out_dim], [3,3]);
-        let net_configs: [Conv2d<B>; D] = std::iter::once(Conv2dConfig::new([in_dim, middle_dim], [3, 3]))
-                .chain(std::iter::repeat(Conv2dConfig::new([middle_dim, middle_dim], [3, 3])).take(D - 2))
-                .chain(std::iter::once(Conv2dConfig::new([middle_dim, out_dim], [3, 3])))
-                .map(|x| x.init(device))
-                .try_collect().expect("Finished");
-            // .concat([Conv2dConfig::new([in_dim, middle_dim], [3,3])]);
-        ResidualBlock<B, D> {
-            nets: _
-        }
-    }
 }
 
 #[derive(Debug, Config)]

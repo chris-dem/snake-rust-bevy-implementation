@@ -1,8 +1,8 @@
-use std::fmt::{Debug, Display};
+use std::{collections::HashSet, fmt::{Debug, Display}};
 
 use crate::{
-    common::{Cell, Coord, GRID_X, GRID_Y},
-    snake::{ArrSnake, SnakeTrait},
+    common::{Cell, Coord, Direction, GRID_X, GRID_Y},
+    snake::ArrSnake,
 };
 use anyhow::Result as ARes;
 use ndarray::prelude::*;
@@ -20,6 +20,14 @@ pub enum StepResult {
         level_reached: Speed,
     },
     Base,
+}
+
+pub trait SnakeTrait: Debug + Sized {
+    fn check_cell(&self, coords: Coord) -> Option<bool>;
+    fn set_direction(&mut self, dir: Direction);
+    fn step(&mut self, with_food: bool) -> ARes<()>;
+    fn is_next_valid(&self) -> bool;
+    fn get_elements(&self) -> Vec<bool>;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -87,13 +95,14 @@ impl Speed {
     }
 
     pub fn to_time_speed(self) -> f32 {
-        match self {
-            Self::Slow => 1.,
-            Self::Medium => 0.9,
-            Self::Hard => 0.8,
-            Self::VeryHard => 0.7,
-            Self::GodMode => 0.5,
-        }
+        0.2
+        // match self {
+        //     Self::Slow => 1.,
+        //     Self::Medium => 0.9,
+        //     Self::Hard => 0.8,
+        //     Self::VeryHard => 0.7,
+        //     Self::GodMode => 0.5,
+        // }
     }
 }
 
@@ -152,7 +161,7 @@ impl GameAPI {
         let mid = Coord::middle();
         let c = loop {
             let c = Coord {
-                row: rng.random_range(0..GRID_X as u8),
+                row: rng.random_range(0..GRID_X as u8) ,
                 col: rng.random_range(0..GRID_Y as u8),
             };
             if mid.l0(c) > 1 {
@@ -185,19 +194,23 @@ impl GameAPI {
         }
     }
 
+    pub fn update_direction(&mut self, dir: Direction) {
+        self.snake.set_direction(dir);
+    }
     fn set_speed(&mut self) {
-        let f = self.snake.size as f64 / (GRID_X * GRID_Y) as f64;
-        self.mode = match f {
-            (0.0..0.2) => Speed::Slow,
-            (0.2..0.4) => Speed::Medium,
-            (0.4..0.6) => Speed::Hard,
-            (0.6..0.8) => Speed::VeryHard,
-            (0.8..=1.) => Speed::GodMode,
-            _ => unreachable!("Should not exceed 1"),
-        };
+        // let f = self.snake.size as f64 / (GRID_X * GRID_Y) as f64;
+        // self.mode = match f {
+        //     (0.0..0.2) => Speed::Slow,
+        //     (0.2..0.4) => Speed::Medium,
+        //     (0.4..0.6) => Speed::Hard,
+        //     (0.6..0.8) => Speed::VeryHard,
+        //     (0.8..=1.) => Speed::GodMode,
+        //     _ => unreachable!("Should not exceed 1"),
+        // };
+        self.mode = Speed::Medium;
     }
 
-    pub fn next(&mut self, rng: &mut dyn RngCore) -> ARes<StepResult> {
+    pub fn next(&mut self, rng: &mut impl RngCore) -> ARes<StepResult> {
         if !self.snake.is_next_valid() {
             return Ok(StepResult::Lost {
                 num_steps: self.steps as usize,

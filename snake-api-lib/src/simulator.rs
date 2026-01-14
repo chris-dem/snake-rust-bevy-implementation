@@ -6,10 +6,9 @@
 use crate::prelude::{api::*, common::*, snake::*};
 use anyhow::Result as ARes;
 use rand::prelude::*;
-use rayon::prelude::*;
 
 pub trait PlayerTrait {
-    fn choose_dir(&mut self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction;
+    fn choose_dir(&self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,13 +41,14 @@ pub enum SimulationStepReward {
 impl Simulator {
     pub fn new(game_builder: GameAPIBuilder, simulator_options: SimulatorOptions) -> Self {
         Self {
-            game_builder, simulator_options,
+            game_builder,
+            simulator_options,
         }
     }
     pub fn simulation(
         &self,
-        player: &mut impl PlayerTrait,
-        rng: &mut dyn RngCore,
+        player: &impl PlayerTrait,
+        rng: &mut impl RngCore,
     ) -> ARes<Vec<SimulationStep>> {
         let mut game_instance = self.game_builder.build(Some(rng));
         let mut snapshots = vec![];
@@ -56,16 +56,19 @@ impl Simulator {
             let before_step = game_instance.num_of_apples;
             let before_step_repr = game_instance.to_game_repr();
             let dir = player.choose_dir(&game_instance, rng);
-            game_instance.snake.direction = dir;
+            game_instance.update_direction(dir);
             let mut num_iter = 0usize;
             let next_step = game_instance.next(rng)?;
             let otp = match next_step {
-                StepResult::Lost { .. } => SimulationStep {
-                    snapshot: before_step_repr,
-                    direction: dir,
-                    reward: SimulationStepReward::Lost,
-                    next_state: None,
-                },
+                StepResult::Lost { .. } => {
+                    dbg!((game_instance.steps, game_instance.num_of_apples));
+                    SimulationStep {
+                        snapshot: before_step_repr,
+                        direction: dir,
+                        reward: SimulationStepReward::Lost,
+                        next_state: None,
+                    }
+                }
                 StepResult::Win { .. } => SimulationStep {
                     snapshot: before_step_repr,
                     direction: dir,

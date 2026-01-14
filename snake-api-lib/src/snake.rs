@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use crate::common::{Coord, Direction, GRID_X, GRID_Y};
+use crate::{
+    api::SnakeTrait,
+    common::{Coord, Direction, GRID_X, GRID_Y},
+};
 use anyhow::{Result as AResult, anyhow};
 use bitvec::prelude::*;
 use itertools::Itertools;
@@ -9,14 +12,6 @@ use strum::IntoEnumIterator;
 
 // Fixed-size bit array
 type GridBits = BitArr!(for GRID_X * GRID_Y, in u64, Msb0); // 768 bits using u64 storage
-
-pub trait SnakeTrait: Debug + Sized {
-    fn check_cell(&self, coords: Coord) -> Option<bool>;
-    fn direction(&mut self, dir: Direction);
-    fn step(&mut self, with_food: bool) -> AResult<()>;
-    fn is_next_valid(&self) -> bool;
-    fn get_elements(&self) -> Vec<bool>;
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct ArrSnake {
@@ -114,14 +109,22 @@ impl ArrSnake {
         add_direction(self.head, self.direction)
     }
     pub fn get_free_spot(&self, rng: &mut dyn RngCore) -> Option<Coord> {
-        (self.maps[0] | self.maps[1] | self.maps[2] | self.maps[3])
+        let empty_locs = (self.maps[0] | self.maps[1] | self.maps[2] | self.maps[3])
             .iter_zeros()
             .filter(|x| *x < GRID_X * GRID_Y)
-            .choose(rng)
-            .map(|x| Coord {
-                row: (x / GRID_Y) as u8,
-                col: (x % GRID_Y) as u8,
-            })
+            .collect_vec();
+        let filtered: Box<dyn Iterator<Item = usize>> = if self.size < 10 {
+            Box::new(empty_locs.into_iter().filter(|x| {
+                let dist = self.head.l1(Coord::from_index(*x));
+                (2..=5).contains(&dist)
+            }))
+        } else {
+            Box::new(empty_locs.into_iter())
+        };
+        filtered.choose(rng).map(|x| Coord {
+            row: (x / GRID_Y) as u8,
+            col: (x % GRID_Y) as u8,
+        })
     }
 }
 
@@ -141,7 +144,7 @@ impl SnakeTrait for ArrSnake {
         Some(!self.maps.iter().any(|arr| arr[indx]))
     }
 
-    fn direction(&mut self, dir: Direction) {
+    fn set_direction(&mut self, dir: Direction) {
         self.direction = dir;
         for map in self.maps.iter_mut() {
             map.set(self.head.into_index(), false);
@@ -246,7 +249,7 @@ mod tests {
     fn step_one_left_from_beginning_food_and_up() {
         let mut snake = ArrSnake::default();
         snake.step(true).expect("Should step normally");
-        snake.direction(Direction::Up);
+        snake.set_direction(Direction::Up);
         snake.step(false).expect("Should step normally");
         let left = Coord::middle() - Coord { row: 0, col: 1 };
         let up = left - Coord { row: 1, col: 0 };
@@ -270,9 +273,9 @@ mod tests {
     fn step_zig_zag() {
         let mut snake = ArrSnake::default();
         snake.step(true).expect("Should step normally");
-        snake.direction(Direction::Up);
+        snake.set_direction(Direction::Up);
         snake.step(true).expect("Should step normally");
-        snake.direction(Direction::Right);
+        snake.set_direction(Direction::Right);
         snake.step(false).expect("Should step normally");
         println!("{}", snake);
     }
