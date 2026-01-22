@@ -3,9 +3,11 @@ use bevy_rand::prelude::*;
 use bevy_smud::prelude::*;
 
 use crate::{
-    bot_logic::BotAgent, endscreen::EndScreenPlugin, game_logic::GamePlugin, menu::MenuPlugin, setup::CameraPlugin
+    bot_logic::BotAgent, endscreen::EndScreenPlugin, game_logic::GamePlugin, menu::MenuPlugin,
+    setup::CameraPlugin,
 };
 
+pub(crate) mod bot_logic;
 pub(crate) mod common;
 pub(crate) mod constants;
 pub(crate) mod endscreen;
@@ -13,7 +15,6 @@ pub(crate) mod game_logic;
 pub(crate) mod menu;
 pub(crate) mod setup;
 pub(crate) mod ui_handling;
-pub(crate) mod bot_logic;
 
 #[derive(Debug, Clone, Copy, Default, States, PartialEq, Eq, Hash)]
 pub(crate) enum AppState {
