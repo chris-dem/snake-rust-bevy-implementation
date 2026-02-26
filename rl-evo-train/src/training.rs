@@ -1,5 +1,8 @@
 use burn::{
-    data::{dataloader::DataLoaderBuilder, dataset::vision::MnistDataset},
+    data::{
+        dataloader::{self, DataLoaderBuilder},
+        dataset::vision::MnistDataset,
+    },
     module::AutodiffModule,
     nn::loss::{self, CrossEntropyLoss, CrossEntropyLossConfig, HuberLossConfig},
     optim::{AdamConfig, GradientsParams, Optimizer},
@@ -13,6 +16,7 @@ use burn::{
 };
 
 use rand::prelude::*;
+use tqdm::Iter;
 
 use crate::{
     data::{BatchedSimulationStep, DatasetGenerator, DatasetGeneratorConfig},
@@ -24,7 +28,9 @@ pub struct TrainingConfig {
     pub model: ModelConfig,
     pub optimizer: AdamConfig,
     // #[config(default = 100)]
-    #[config(default = 250)]
+    #[config(default = 100)]
+    pub num_episodes: usize,
+    #[config(default = 5)]
     pub num_epochs: usize,
     #[config(default = 64)]
     pub batch_size: usize,
@@ -51,7 +57,7 @@ pub(crate) fn run<B: AutodiffBackend>(
     let config_model = ModelConfig::new(4, 512);
     let config_optimizer = AdamConfig::new();
     let config = TrainingConfig::new(config_model, config_optimizer);
-    let dataloader = dgb.build();
+    let mut dataloader = dgb.build();
 
     B::seed(&device, config.seed);
     let mut rng = SmallRng::seed_from_u64(config.seed);
@@ -61,42 +67,39 @@ pub(crate) fn run<B: AutodiffBackend>(
     let mut optim = config.optimizer.init();
 
     // Iterate over our training and validation loop for X epochs.
-    for epoch in 1..config.num_epochs + 1 {
-        // Implement our training loop.
-        for (iteration, batch) in dataloader
-            .iter_with_model(&model.valid(), &device, &mut rng, true)
-            .enumerate()
-        {
-            let loss = forward_pass(&device, &model, batch, dgb.rew_config.gamma_factor);
+    for ep in 1..config.num_episodes + 1 {
+        let model_valid = model.valid();
+        let p = dataloader.gen_sims(&model_valid, &device, &mut rng, ep, true, false);
+        for epoch in 1..config.num_epochs + 1 {
+            for (iteration, batch) in dataloader.iter_sims(&mut rng, &p, &device).enumerate() {
+                let loss = forward_pass(&device, &model, batch, dgb.rew_config.gamma_factor);
 
-            println!(
-                "[Train - Epoch {} - Iteration {}] Loss {:.3}",
-                epoch,
-                iteration,
-                loss.clone().into_scalar(),
-            );
+                println!(
+                    "[Episode - {} - Train - Epoch {} - Iteration {}] Loss {:.3}",
+                    ep,
+                    epoch,
+                    iteration,
+                    loss.clone().into_scalar(),
+                );
 
-            // Gradients for the current backward pass
-            let grads = loss.backward();
-            // Gradients linked to each parameter of the model.
-            let grads = GradientsParams::from_grads(grads, &model);
-            // Update the model using the optimizer.
-            model = optim.step(config.learning_rate, model, grads);
+                // Gradients for the current backward pass
+                let grads = loss.backward();
+                // Gradients linked to each parameter of the model.
+                let grads = GradientsParams::from_grads(grads, &model);
+                // Update the model using the optimizer.
+                model = optim.step(config.learning_rate, model, grads);
+            }
         }
-
         // Get the model without autodiff.
         let model_valid = model.valid();
-
+        let p = dataloader.gen_sims(&model_valid, &device, &mut rng, ep, false, true);
         // Implement our validation loop.
-        for (iteration, batch) in dataloader
-            .iter_with_model(&model_valid, &device, &mut rng, false)
-            .enumerate()
-        {
+        for (iteration, batch) in dataloader.iter_sims(&mut rng, &p, &device).enumerate() {
             let loss = forward_pass(&device, &model_valid, batch, dgb.rew_config.gamma_factor);
 
             println!(
-                "[Valid - Epoch {} - Iteration {}] Loss {:.3}",
-                epoch,
+                "[Valid - Episode {} - Iteration {}] Loss {:.3}",
+                ep,
                 iteration,
                 loss.clone().into_scalar(),
             );
@@ -132,6 +135,6 @@ fn forward_pass<B: Backend, C: Backend>(
     loss::MseLoss::new().forward(
         sel,
         reward + next_state_qual.mul_scalar(gamma_factor),
-        loss::Reduction::Auto,
+        loss::Reduction::Mean,
     )
 }

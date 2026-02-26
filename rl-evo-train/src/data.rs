@@ -3,7 +3,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 use anyhow::Result as ARes;
 use burn::{
     data::{
-        dataloader::{DataLoader, batcher::*},
+        dataloader::{DataLoader, DataLoaderBuilder, DataLoaderIterator, batcher::*},
         dataset::vision::MnistItem,
     },
     prelude::*,
@@ -27,6 +27,7 @@ use crate::model::{Model, StateRepr};
 #[derive(Debug)]
 pub(crate) struct DatasetGenerator {
     data_gen: DatasetGeneratorConfig,
+    current_sims: Vec<SimulationStep>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -38,7 +39,10 @@ pub(crate) struct DatasetGeneratorConfig {
 
 impl DatasetGeneratorConfig {
     pub fn build(self) -> DatasetGenerator {
-        DatasetGenerator { data_gen: self }
+        DatasetGenerator {
+            data_gen: self,
+            current_sims: vec![],
+        }
     }
 }
 
@@ -86,11 +90,11 @@ impl<B: Backend> From<(GameAPIBinaryRepr, &B::Device)> for StateRepr<B> {
         let arr = arr
             .as_standard_layout()
             .to_owned()
-            .map(|x| *x as i32)
             .into_raw_vec_and_offset()
             .0;
         let td = TensorData::new(arr, [1, GRID_X, GRID_Y]);
         let td: Tensor<B, 4, Float> = Tensor::<B, 3, Int>::from_data(td, dev).one_hot(4).float();
+        let td = td.random_like(Distribution::Normal(0.0, 1e-2)) + td;
         StateRepr(td)
     }
 }
@@ -98,41 +102,43 @@ impl<B: Backend> From<(GameAPIBinaryRepr, &B::Device)> for StateRepr<B> {
 impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
     fn choose_dir(&self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction {
         let dir = game_instance.snake.direction;
+        // dbg!(game_instance.snake.head);
         let dir_vec = Direction::iter()
             .map(|d| {
-                (game_instance
+                let res = (game_instance
                     .snake
                     .check_cell(game_instance.snake.head.add_dir(d))
-                    .is_some_and(|x| !x))
+                    .is_some_and(|x| !x));
+                res
             })
             .collect_vec();
-        if self.active_mode && with_rng.random_bool(self.eps) {
-            return dir_vec
-                .iter()
-                .enumerate()
-                .filter_map(|x| {
-                    if *x.1 {
-                        Some(Direction::from(x.0))
-                    } else {
-                        None
-                    }
-                })
-                .choose(with_rng)
-                .unwrap_or(Direction::Up);
-        }
+        // if self.active_mode && with_rng.random_bool(self.eps) {
+        //     return dir_vec
+        //         .iter()
+        //         .enumerate()
+        //         .filter_map(|x| {
+        //             if *x.1 {
+        //                 Some(Direction::from(x.0))
+        //             } else {
+        //                 None
+        //             }
+        //         })
+        //         .choose(with_rng)
+        //         .unwrap_or(Direction::Up);
+        // }
         let state_repr: StateRepr<B> = (game_instance.to_game_repr(), self.device).into();
         let out = self.model.forward(state_repr);
+        // dbg!(out.clone().to_data().to_vec::<f32>());
         let m = Tensor::<B, 1, Bool>::from_data(
             dir_vec.into_iter().collect_array::<4>().unwrap(),
             self.device,
         );
         let indx = if m.clone().any().into_scalar().to_bool() {
             let v = out.clone().min().into_scalar().elem::<f32>();
-            out.flatten(0, 1)
-                .mask_fill(m.bool_not(), v)
-                .argmax(0)
-                .into_scalar()
-                .elem::<i64>() as usize
+            let flipped = out.flatten(0, 1).mask_fill(m.bool_not(), v);
+            // dbg!(flipped.clone().to_data().to_vec::<f32>());
+
+            flipped.argmax(0).into_scalar().elem::<i64>() as usize
         } else {
             let out: Tensor<B, 1> = out.flatten(0, 1);
             out.argmax(0).into_scalar().elem::<i64>() as usize
@@ -142,13 +148,15 @@ impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
 }
 
 impl DatasetGenerator {
-    pub fn iter_with_model<B: Backend, T>(
-        &self,
-        model: &Model<B>,
-        device: &B::Device,
+    pub fn gen_sims<'a, 'b, B: Backend, T>(
+        &mut self,
+        model: &'a Model<B>,
+        device: &'b B::Device,
         with_rng: &mut T,
+        ep_iter: usize,
         active_mode: bool,
-    ) -> impl Iterator<Item = BatchedSimulationStep<B>>
+        debug_result: bool,
+    ) -> PlayerModel<'a, 'b, B>
     where
         T: RngCore + Clone + SeedableRng + Send + Sync,
     {
@@ -159,23 +167,38 @@ impl DatasetGenerator {
             device,
             active_mode,
         };
+        let ep_size = 100 + ep_iter * 100;
         let sim = Simulator::new(
             GameAPIBuilder::default(),
             SimulatorOptions {
-                number_of_iterations: self.data_gen.sim_config.episode_limit.unwrap_or(10_000),
+                number_of_iterations: self.data_gen.sim_config.episode_limit.unwrap_or(ep_size),
             },
         );
 
-        let mut sims = tqdm::tqdm((0..p).map(|_| sim.simulation(&player, with_rng)))
+        let sims = tqdm::tqdm((0..p).map(|_| sim.simulation(&player, with_rng, debug_result)))
             .collect::<ARes<Vec<_>>>()
             .expect("Should compile")
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        sims.shuffle(with_rng);
-        let batches = sims
+        self.current_sims = sims;
+        player
+    }
+
+    pub fn iter_sims<B: Backend, T>(
+        &mut self,
+        with_rng: &mut T,
+        player: &PlayerModel<B>,
+        device: &B::Device,
+    ) -> impl Iterator<Item = BatchedSimulationStep<B>>
+    where
+        T: RngCore + Clone + SeedableRng + Send + Sync,
+    {
+        self.current_sims.shuffle(with_rng);
+        let batches = self
+            .current_sims
             .chunks(self.data_gen.batch_size)
-            .map(|c| self.batch_sims(device, c.iter().cloned(), &player, active_mode))
+            .map(|c| self.batch_sims(device, c.iter().cloned(), &player))
             .collect_vec();
         batches.into_iter()
     }
@@ -185,7 +208,6 @@ impl DatasetGenerator {
         device: &B::Device,
         els: impl Iterator<Item = SimulationStep>,
         player: &PlayerModel<B>,
-        active_mode: bool,
     ) -> BatchedSimulationStep<B> {
         let mut v_snapshot: Vec<Tensor<B, 4, Float>> = vec![];
         let mut v_direction = vec![];

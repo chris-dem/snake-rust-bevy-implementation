@@ -121,10 +121,10 @@ impl Display for Direction {
 impl From<usize> for Direction {
     fn from(value: usize) -> Self {
         match value {
-            0 => Self::Up,
-            1 => Self::Right,
-            2 => Self::Down,
-            3 => Self::Left,
+            0 => Self::Left,
+            1 => Self::Up,
+            2 => Self::Right,
+            3 => Self::Down,
             _ => unreachable!(),
         }
     }

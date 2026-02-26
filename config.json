@@ -2,15 +2,14 @@
   "batch_size": 128,
   "rew_config": {
     "step_rew": -0.1,
-    "step_rew_imp": 0.5,
+    "step_rew_imp": 1.0,
     "fruit_rew": 5,
-    "win_rew": 100,
-    "lose_rew": -100,
+    "win_rew": 10,
+    "lose_rew": -10,
     "gamma_factor": 0.8
   },
   "sim_config": {
-    "number_episodes": 50,
-    "episode_limit": 2000,
-    "eps_expl": 0.01
+    "number_episodes": 10,
+    "eps_expl": 0.1
   }
 }

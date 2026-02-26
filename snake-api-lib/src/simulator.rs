@@ -103,11 +103,13 @@ impl Simulator {
         &self,
         player: &impl PlayerTrait,
         rng: &mut impl RngCore,
+        with_summary: bool,
     ) -> ARes<Vec<SimulationStep>> {
         let mut game_instance = self.game_builder.build(Some(rng));
         let mut snapshots = vec![];
         let mut num_iter = 0usize;
         loop {
+            num_iter += 1;
             let before_step = game_instance.num_of_apples;
             let before_step_repr = game_instance.to_game_repr();
             let dir = player.choose_dir(&game_instance, rng);
@@ -122,8 +124,11 @@ impl Simulator {
             );
             snapshots.push(otp);
             if matches!(next_step, StepResult::Win { .. } | StepResult::Lost { .. }) {
+                if with_summary {
+                    dbg!((game_instance.num_of_apples, game_instance.steps));
+                }
                 break;
-            } else if num_iter == self.simulator_options.number_of_iterations {
+            } else if num_iter >= self.simulator_options.number_of_iterations {
                 snapshots.push(SimulationStep {
                     snapshot: game_instance.to_game_repr(),
                     direction: dir,
@@ -132,7 +137,6 @@ impl Simulator {
                 });
                 break;
             }
-            num_iter += 1;
         }
         ARes::Ok(snapshots)
     }
