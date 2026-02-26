@@ -4,13 +4,13 @@ use std::{
 };
 use strum_macros::EnumIter;
 
-pub const GRID_X: usize = 32;
-pub const GRID_Y: usize = 40;
+pub const GRID_X: usize = 12;
+pub const GRID_Y: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Coord {
-    pub row: u8,
-    pub col: u8,
+    pub row: i16,
+    pub col: i16,
 }
 
 impl Default for Coord {
@@ -20,10 +20,10 @@ impl Default for Coord {
 }
 
 impl Coord {
-    pub fn l1(self, other: Self) -> u8 {
+    pub fn l1(self, other: Self) -> u16 {
         self.row.abs_diff(other.row) + self.col.abs_diff(other.col)
     }
-    pub fn l0(self, other: Self) -> u8 {
+    pub fn l0(self, other: Self) -> u16 {
         self.row
             .abs_diff(other.row)
             .max(self.col.abs_diff(other.col))
@@ -35,15 +35,31 @@ impl Coord {
 
     pub fn from_index(other: usize) -> Self {
         Self {
-            row: (other % GRID_Y) as u8,
-            col: (other / GRID_Y) as u8,
+            row: (other % GRID_Y) as i16,
+            col: (other / GRID_Y) as i16,
+        }
+    }
+
+    pub fn add_dir(self, other: Direction) -> Self {
+        let Coord { row, col } = self;
+        let d = other as i16;
+        if d % 2 == 0 {
+            Coord {
+                row,
+                col: col + (d - 1),
+            }
+        } else {
+            Coord {
+                row: row + d - 2,
+                col,
+            }
         }
     }
 
     pub fn middle() -> Self {
         Self {
-            row: GRID_Y as u8 / 2,
-            col: GRID_X as u8 / 2,
+            row: GRID_Y as i16 / 2,
+            col: GRID_X as i16 / 2,
         }
     }
 }

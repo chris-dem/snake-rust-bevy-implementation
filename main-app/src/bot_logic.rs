@@ -26,14 +26,15 @@ type MyBackend = NdArray<f32, i32>;
 
 fn load_file() -> Agent {
     // Load model in full precision from MessagePack file
-    let recorder = NamedMpkFileRecorder::<FullPrecisionSettings>::new();
-
-    let device = Default::default();
-    let model: Model<MyBackend> = ModelConfig::new(4, 1024)
-        .init(&device)
-        .load_file("/tmp/burn-tutorial/model.mpk", &recorder, &device)
-        .expect("Should be able to load the model weights from the provided file");
-    Agent(Arc::new(Mutex::new(model)))
+    // let recorder = NamedMpkFileRecorder::<FullPrecisionSettings>::new();
+    //
+    // let device = Default::default();
+    // let model: Model<MyBackend> = ModelConfig::new(4, 1024)
+    //     .init(&device)
+    //     .load_file("/tmp/burn-tutorial/model.mpk", &recorder, &device)
+    //     .expect("Should be able to load the model weights from the provided file");
+    // Agent(Arc::new(Mutex::new(model)))
+    todo!("Fix")
 }
 
 pub fn set_dir_agent(
@@ -41,22 +42,23 @@ pub fn set_dir_agent(
     mut game_state: ResMut<GameState>,
     mut rng: Single<&mut ChaCha8Rng, With<GlobalRng>>,
 ) {
-    let device = Default::default();
-    let ag = agent.0.lock().expect("should be lockable");
-    let player = PlayerModel {
-        model: &ag,
-        active_mode: false,
-        eps: 0.,
-        device: &device,
-    };
-
-    let dir = player.choose_dir(&game_state.0, &mut SmallRng::seed_from_u64(rng.next_u64()));
-    game_state.0.update_direction(dir);
+    // let device = Default::default();
+    // let ag = agent.0.lock().expect("should be lockable");
+    // let player = PlayerModel {
+    //     model: &ag,
+    //     active_mode: false,
+    //     eps: 0.,
+    //     device: &device,
+    // };
+    //
+    // let dir = player.choose_dir(&game_state.0, &mut SmallRng::seed_from_u64(rng.next_u64()));
+    // game_state.0.update_direction(dir);
 }
 
 impl Plugin for BotAgent {
     fn build(&self, app: &mut App) {
-        let agent = load_file();
-        app.insert_resource(agent);
+        // todo
+        // let agent = load_file();
+        // app.insert_resource(agent);
     }
 }

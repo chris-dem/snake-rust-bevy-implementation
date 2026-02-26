@@ -49,8 +49,8 @@ impl Plugin for GamePlugin {
             .add_systems(Update, set_keyboard_dir.run_if(in_state(AppState::Game)))
             .add_systems(
                 FixedUpdate,
-                (set_dir_agent, step_snake).run_if(in_state(AppState::Game)),
-                // (step_snake).run_if(in_state(AppState::Game)),
+                // (set_dir_agent, step_snake).run_if(in_state(AppState::Game)),
+                (step_snake).run_if(in_state(AppState::Game)),
             )
             .add_systems(
                 FixedUpdate,

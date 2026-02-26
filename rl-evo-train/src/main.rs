@@ -20,7 +20,6 @@ fn main() -> ARes<()> {
 
     crate::training::run::<MyAutodiffBackend>(
         artifact_dir,
-        TrainingConfig::new(ModelConfig::new(10, 512), AdamConfig::new()),
         device.clone(),
         dataset_cfg,
     );

@@ -43,13 +43,12 @@ fn create_artifact_dir(artifact_dir: &str) {
 
 pub(crate) fn run<B: AutodiffBackend>(
     artifact_dir: &str,
-    config: TrainingConfig,
     device: B::Device,
     dgb: DatasetGeneratorConfig,
 ) {
     create_artifact_dir(artifact_dir);
     // Create the configuration.
-    let config_model = ModelConfig::new(10, 1024);
+    let config_model = ModelConfig::new(4, 512);
     let config_optimizer = AdamConfig::new();
     let config = TrainingConfig::new(config_model, config_optimizer);
     let dataloader = dgb.build();

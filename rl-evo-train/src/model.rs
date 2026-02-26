@@ -9,6 +9,7 @@ use burn::{
     tensor::{activation::gelu, backend::AutodiffBackend},
 };
 use itertools::Itertools;
+use snake_api_lib::common::{GRID_X, GRID_Y};
 
 #[derive(Debug, Module)]
 pub struct ResidualBlock<B: Backend, const D: usize> {
@@ -31,19 +32,25 @@ pub struct Model<B: Backend> {
 }
 
 impl<B: Backend, const D: usize> ResidualBlock<B, D> {
-    fn new([in_dim, middle_dim, out_dim]: [usize ;3],device: &B::Device) -> ResidualBlock<B, D> {
-       let c_start = Conv2dConfig::new([in_dim, middle_dim], [3,3]);
-        let c_mid = Conv2dConfig::new([middle_dim, middle_dim], [3,3]);
-        let c_end = Conv2dConfig::new([middle_dim, out_dim], [3,3]);
-        let net_configs: [Conv2d<B>; D] = std::iter::once(Conv2dConfig::new([in_dim, middle_dim], [3, 3]))
-                .chain(std::iter::repeat(Conv2dConfig::new([middle_dim, middle_dim], [3, 3])).take(D - 2))
-                .chain(std::iter::once(Conv2dConfig::new([middle_dim, out_dim], [3, 3])))
-                .map(|x| x.init(device))
-                .try_collect().expect("Finished");
-            // .concat([Conv2dConfig::new([in_dim, middle_dim], [3,3])]);
-        ResidualBlock<B, D> {
-            nets: _
-        }
+    fn new([in_dim, middle_dim, out_dim]: [usize; 3], device: &B::Device) -> ResidualBlock<B, D> {
+        let c_start = Conv2dConfig::new([in_dim, middle_dim], [3, 3]);
+        let c_mid = Conv2dConfig::new([middle_dim, middle_dim], [3, 3]);
+        let c_end = Conv2dConfig::new([middle_dim, out_dim], [3, 3]);
+        todo!("Idk do this later");
+        // let net_configs: [Conv2d<B>; D] =
+        //     std::iter::once(Conv2dConfig::new([in_dim, middle_dim], [3, 3]))
+        //         .chain(
+        //             std::iter::repeat(Conv2dConfig::new([middle_dim, middle_dim], [3, 3]))
+        //                 .take(D - 2),
+        //         )
+        //         .chain(std::iter::once(Conv2dConfig::new(
+        //             [middle_dim, out_dim],
+        //             [3, 3],
+        //         )))
+        //         .map(|x| x.init(device))
+        //         .try_collect()
+        //         .expect("Finished");
+        // .concat([Conv2dConfig::new([in_dim, middle_dim], [3,3])]);
     }
 }
 
@@ -74,7 +81,8 @@ impl ModelConfig {
                 .with_padding(PaddingConfig2d::Same)
                 .init(device),
             act: Gelu::new(),
-            lin1: LinearConfig::new(16 * 8 * 10, self.hidden_size).init(device),
+            lin1: LinearConfig::new(16 * (GRID_X / 4) * (GRID_Y / 4), self.hidden_size)
+                .init(device),
             lin2: LinearConfig::new(self.hidden_size, self.num_classes).init(device),
             dropout: DropoutConfig::new(self.dropout).init(),
             pool: MaxPool2dConfig::new([2, 2]).init(),
@@ -92,17 +100,18 @@ impl<B: Backend> Model<B> {
     pub fn forward(&self, state: StateRepr<B>) -> Tensor<B, 2> {
         let StateRepr(snapshot) = state;
         // Create a channel at the second dimension
+
         let [bdims, row, col, ch] = snapshot.dims();
 
         let x = snapshot.reshape([bdims, ch, row, col]);
 
-        let x = self.conv1.forward(x); // 32 40
+        let x = self.conv1.forward(x); // 8 16
         let x = gelu(x);
         let x = self.dropout.forward(x);
         let x = self.conv1s.forward(x);
         let x = gelu(x);
 
-        let x = self.pool.forward(x); // 16 20
+        let x = self.pool.forward(x); // 4 8
 
         let x = self.conv2.forward(x);
         let x = gelu(x);
@@ -110,12 +119,12 @@ impl<B: Backend> Model<B> {
         let x = self.conv2s.forward(x);
         let x = gelu(x);
 
-        let x = self.pool.forward(x); // 8 10
+        let x = self.pool.forward(x); // 2 4
 
         let x = self.conv2ss.forward(x);
         let x = self.act.forward(x);
 
-        let x = x.reshape([bdims, 16 * 8 * 10]);
+        let x = x.reshape([bdims, 16 * (GRID_X / 4) * (GRID_Y / 4)]);
         let x = self.lin1.forward(x);
         let x = self.dropout.forward(x);
         let x = gelu(x);

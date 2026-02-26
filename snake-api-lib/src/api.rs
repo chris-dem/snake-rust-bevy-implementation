@@ -1,4 +1,7 @@
-use std::{collections::HashSet, fmt::{Debug, Display}};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+};
 
 use crate::{
     common::{Cell, Coord, Direction, GRID_X, GRID_Y},
@@ -118,8 +121,8 @@ impl Display for GameAPI {
             write!(f, "{i_print:^3}|")?;
             for j in 0..GRID_Y {
                 let indx = Coord {
-                    row: i as u8,
-                    col: j as u8,
+                    row: i as i16,
+                    col: j as i16,
                 };
                 if indx == self.snake.head {
                     write!(f, "{:^3}|", 'H')?;
@@ -161,8 +164,8 @@ impl GameAPI {
         let mid = Coord::middle();
         let c = loop {
             let c = Coord {
-                row: rng.random_range(0..GRID_X as u8) ,
-                col: rng.random_range(0..GRID_Y as u8),
+                row: rng.random_range(0..GRID_X as i16),
+                col: rng.random_range(0..GRID_Y as i16),
             };
             if mid.l0(c) > 1 {
                 break c;
@@ -181,7 +184,7 @@ impl GameAPI {
     }
 
     pub fn get_pos(&self, pos: Coord) -> Option<Cell> {
-        if pos.row > GRID_X as u8 && pos.col > GRID_Y as u8 {
+        if pos.row > GRID_X as i16 && pos.col > GRID_Y as i16 {
             return None;
         }
         if self.apples == pos {
@@ -198,15 +201,6 @@ impl GameAPI {
         self.snake.set_direction(dir);
     }
     fn set_speed(&mut self) {
-        // let f = self.snake.size as f64 / (GRID_X * GRID_Y) as f64;
-        // self.mode = match f {
-        //     (0.0..0.2) => Speed::Slow,
-        //     (0.2..0.4) => Speed::Medium,
-        //     (0.4..0.6) => Speed::Hard,
-        //     (0.6..0.8) => Speed::VeryHard,
-        //     (0.8..=1.) => Speed::GodMode,
-        //     _ => unreachable!("Should not exceed 1"),
-        // };
         self.mode = Speed::Medium;
     }
 
@@ -244,8 +238,8 @@ impl GameAPI {
     pub fn to_game_repr(&self) -> GameAPIBinaryRepr {
         let a = Array2::from_shape_fn((GRID_X, GRID_Y), |(row, col)| {
             let pos = Coord {
-                row: row as u8,
-                col: col as u8,
+                row: row as i16,
+                col: col as i16,
             };
             match self
                 .get_pos(pos)

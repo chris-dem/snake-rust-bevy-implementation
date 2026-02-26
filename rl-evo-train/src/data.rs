@@ -7,7 +7,8 @@ use burn::{
         dataset::vision::MnistItem,
     },
     prelude::*,
-    tensor::{backend::AutodiffBackend, ops::BoolTensor},
+    record::Record,
+    tensor::{Distribution, backend::AutodiffBackend, ops::BoolTensor},
 };
 
 use itertools::Itertools;
@@ -15,7 +16,7 @@ use itertools::Itertools;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use snake_api_lib::{
-    api::{GameAPI, GameAPIBinaryRepr, GameAPIBuilder},
+    api::{GameAPI, GameAPIBinaryRepr, GameAPIBuilder, SnakeTrait},
     common::{Direction, GRID_X, GRID_Y},
     simulator::{PlayerTrait, SimulationStep, SimulationStepReward, Simulator, SimulatorOptions},
 };
@@ -51,6 +52,7 @@ pub struct SimulationConfig {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct RewardConfig {
     pub step_rew: f32,
+    pub step_rew_imp: f32,
     pub fruit_rew: f32,
     pub win_rew: f32,
     pub lose_rew: f32,
@@ -96,24 +98,45 @@ impl<B: Backend> From<(GameAPIBinaryRepr, &B::Device)> for StateRepr<B> {
 impl<'a, 'b, B: Backend> PlayerTrait for PlayerModel<'a, 'b, B> {
     fn choose_dir(&self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction {
         let dir = game_instance.snake.direction;
-        let mut dir_vec = Direction::iter().enumerate().collect_vec();
-        dir_vec.remove(dir.inverse() as usize);
+        let dir_vec = Direction::iter()
+            .map(|d| {
+                (game_instance
+                    .snake
+                    .check_cell(game_instance.snake.head.add_dir(d))
+                    .is_some_and(|x| !x))
+            })
+            .collect_vec();
         if self.active_mode && with_rng.random_bool(self.eps) {
-            // unimplemented!("Eps-greedy not implemented due to dropouts");
-            return dir_vec.choose(with_rng).unwrap().1;
+            return dir_vec
+                .iter()
+                .enumerate()
+                .filter_map(|x| {
+                    if *x.1 {
+                        Some(Direction::from(x.0))
+                    } else {
+                        None
+                    }
+                })
+                .choose(with_rng)
+                .unwrap_or(Direction::Up);
         }
         let state_repr: StateRepr<B> = (game_instance.to_game_repr(), self.device).into();
-        let m = Tensor::<B, 1, Int>::from_data(
-            dir_vec
-                .into_iter()
-                .map(|x| x.0 as i32)
-                .collect_array::<3>()
-                .unwrap(),
+        let out = self.model.forward(state_repr);
+        let m = Tensor::<B, 1, Bool>::from_data(
+            dir_vec.into_iter().collect_array::<4>().unwrap(),
             self.device,
         );
-        let out: Tensor<B, 1> = self.model.forward(state_repr).flatten(0, 1).select(0, m);
-        let indx = out.argmax(0).into_scalar().elem::<i64>();
-        let indx = indx as usize;
+        let indx = if m.clone().any().into_scalar().to_bool() {
+            let v = out.clone().min().into_scalar().elem::<f32>();
+            out.flatten(0, 1)
+                .mask_fill(m.bool_not(), v)
+                .argmax(0)
+                .into_scalar()
+                .elem::<i64>() as usize
+        } else {
+            let out: Tensor<B, 1> = out.flatten(0, 1);
+            out.argmax(0).into_scalar().elem::<i64>() as usize
+        };
         Direction::from(indx)
     }
 }
@@ -152,7 +175,7 @@ impl DatasetGenerator {
         sims.shuffle(with_rng);
         let batches = sims
             .chunks(self.data_gen.batch_size)
-            .map(|c| self.batch_sims(device, c.iter().cloned(), &player))
+            .map(|c| self.batch_sims(device, c.iter().cloned(), &player, active_mode))
             .collect_vec();
         batches.into_iter()
     }
@@ -162,6 +185,7 @@ impl DatasetGenerator {
         device: &B::Device,
         els: impl Iterator<Item = SimulationStep>,
         player: &PlayerModel<B>,
+        active_mode: bool,
     ) -> BatchedSimulationStep<B> {
         let mut v_snapshot: Vec<Tensor<B, 4, Float>> = vec![];
         let mut v_direction = vec![];
@@ -186,13 +210,17 @@ impl DatasetGenerator {
                     v_reward.push(self.data_gen.rew_config.step_rew);
                     v_next_state_qual.push(self.data_gen.rew_config.lose_rew);
                 }
-                SimulationStepReward::Step => {
+                SimulationStepReward::Step(b) => {
                     let st: StateRepr<B> = (
                         next_state.expect("Should have next state in step"),
                         player.device,
                     )
                         .into();
-                    v_reward.push(self.data_gen.rew_config.step_rew);
+                    v_reward.push(if b {
+                        self.data_gen.rew_config.step_rew_imp
+                    } else {
+                        self.data_gen.rew_config.step_rew
+                    });
                     let out = player.model.forward(st).argmax(0);
                     let el = out.max().into_scalar().elem::<f32>();
                     v_next_state_qual.push(el);
@@ -215,7 +243,7 @@ impl DatasetGenerator {
         assert!(b_size == v_reward.len() && b_size == v_next_state_qual.len());
         let snaps = Tensor::cat(v_snapshot, 0);
         BatchedSimulationStep {
-            snapshot: snaps,
+            snapshot: snaps.clone(),
             direction: Tensor::from_data(TensorData::new(v_direction, [b_size]), player.device),
             reward: Tensor::from_data(TensorData::new(v_reward, [b_size]), player.device),
             next_state_qual: Tensor::from_data(

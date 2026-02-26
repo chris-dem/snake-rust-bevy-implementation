@@ -51,8 +51,8 @@ impl Display for ArrSnake {
             write!(f, "{i_print:^2}|")?;
             for j in 0..GRID_Y {
                 let indx = Coord {
-                    row: i as u8,
-                    col: j as u8,
+                    row: i as i16,
+                    col: j as i16,
                 }
                 .into_index();
                 let direction_vecs = [
@@ -78,7 +78,7 @@ impl Display for ArrSnake {
 }
 
 fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
-    if coord.row >= GRID_X as u8 || coord.col >= GRID_Y as u8 {
+    if coord.row >= GRID_X as i16 || coord.col >= GRID_Y as i16 {
         return Err(anyhow!("Out of bounds"));
     }
 
@@ -86,21 +86,13 @@ fn add_direction(coord: Coord, direction: Direction) -> AResult<Coord> {
         (Coord { col: 0, .. }, Direction::Left) | (Coord { row: 0, .. }, Direction::Up) => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { col, .. }, Direction::Right) if col == GRID_Y as u8 - 1 => {
+        (Coord { col, .. }, Direction::Right) if col == GRID_Y as i16 - 1 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { row, .. }, Direction::Down) if row == GRID_X as u8 - 1 => {
+        (Coord { row, .. }, Direction::Down) if row == GRID_X as i16 - 1 => {
             Err(anyhow!("Invalid coordinate {:?}, {:?}", coord, direction))
         }
-        (Coord { row, col }, d) => {
-            let d = d as i8;
-            let (ni, nj) = if d % 2 == 0 {
-                (row, (col as i8 + (d - 1)) as u8)
-            } else {
-                ((row as i8 + d - 2) as u8, col)
-            };
-            Ok(Coord { row: ni, col: nj })
-        }
+        (c, d) => Ok(c.add_dir(d)),
     }
 }
 
@@ -122,8 +114,8 @@ impl ArrSnake {
             Box::new(empty_locs.into_iter())
         };
         filtered.choose(rng).map(|x| Coord {
-            row: (x / GRID_Y) as u8,
-            col: (x % GRID_Y) as u8,
+            row: (x / GRID_Y) as i16,
+            col: (x % GRID_Y) as i16,
         })
     }
 }
@@ -132,16 +124,16 @@ impl SnakeTrait for ArrSnake {
     fn is_next_valid(&self) -> bool {
         self.next_step()
             .ok()
-            .and_then(|e| self.check_cell(e))
+            .and_then(|e| self.check_cell(e).map(|x| !x))
             .is_some_and(|x| x)
     }
 
     fn check_cell(&self, coords: Coord) -> Option<bool> {
-        if coords.row >= GRID_X as u8 && coords.col >= GRID_Y as u8 {
+        if !(0..GRID_X as i16).contains(&coords.row) || !(0..GRID_Y as i16).contains(&coords.col) {
             return None;
         }
         let indx = coords.into_index();
-        Some(!self.maps.iter().any(|arr| arr[indx]))
+        Some(self.maps.iter().any(|arr| arr[indx]))
     }
 
     fn set_direction(&mut self, dir: Direction) {
@@ -153,15 +145,6 @@ impl SnakeTrait for ArrSnake {
     }
 
     fn step(&mut self, with_food: bool) -> AResult<()> {
-        let res = self.next_step()?;
-        let index = res.into_index();
-        {
-            let mut ind = self.maps[self.direction as usize]
-                .get_mut(index)
-                .ok_or(anyhow!("Out of bounds"))?;
-            *ind = true;
-        }
-        self.head = res;
         self.size += with_food as usize;
         if !with_food {
             let tail_index = self.tail.into_index();
@@ -172,6 +155,16 @@ impl SnakeTrait for ArrSnake {
                 self.maps[dir as usize].set(tail_index, false);
             }
         }
+        let res = self.next_step()?;
+        let index = res.into_index();
+        {
+            let mut ind = self.maps[self.direction as usize]
+                .get_mut(index)
+                .ok_or(anyhow!("Out of bounds"))?;
+            *ind = true;
+        }
+        self.head = res;
+
         Ok(())
     }
 

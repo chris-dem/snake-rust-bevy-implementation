@@ -5,7 +5,9 @@
  */
 use crate::prelude::{api::*, common::*, snake::*};
 use anyhow::Result as ARes;
+use itertools::Itertools;
 use rand::prelude::*;
+use strum::IntoEnumIterator;
 
 pub trait PlayerTrait {
     fn choose_dir(&self, game_instance: &GameAPI, with_rng: &mut dyn RngCore) -> Direction;
@@ -32,7 +34,7 @@ pub struct SimulationStep {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SimulationStepReward {
-    Step,
+    Step(bool),
     Food,
     Won,
     Lost,
@@ -45,6 +47,58 @@ impl Simulator {
             simulator_options,
         }
     }
+
+    fn handle_next_step(
+        &self,
+        before_step: u128,
+        before_step_repr: GameAPIBinaryRepr,
+        dir: Direction,
+        next_step: StepResult,
+        game_instance: &GameAPI,
+    ) -> SimulationStep {
+        match next_step {
+            StepResult::Lost { .. } => SimulationStep {
+                snapshot: before_step_repr,
+                direction: dir,
+                reward: SimulationStepReward::Lost,
+                next_state: None,
+            },
+            StepResult::Win { .. } => SimulationStep {
+                snapshot: before_step_repr,
+                direction: dir,
+                reward: SimulationStepReward::Won,
+                next_state: None,
+            },
+            StepResult::Base => {
+                let step_rew = if game_instance.snake.size >= 10 {
+                    false
+                } else {
+                    let sn_head = game_instance.snake.head;
+                    let ap_head = game_instance.apples;
+                    let s = Direction::iter().collect_array::<4>().unwrap().map(|d| {
+                        let t1 = game_instance
+                            .snake
+                            .check_cell(sn_head.add_dir(d))
+                            .is_some_and(|x| !x);
+                        t1 && sn_head.l1(ap_head) > sn_head.add_dir(d).l1(ap_head)
+                    });
+                    s[dir as usize]
+                };
+                // let measure_optimal = _;
+                SimulationStep {
+                    snapshot: before_step_repr,
+                    direction: dir,
+                    reward: if before_step == game_instance.num_of_apples {
+                        SimulationStepReward::Step(step_rew)
+                    } else {
+                        SimulationStepReward::Food
+                    },
+                    next_state: Some(game_instance.to_game_repr()),
+                }
+            }
+        }
+    }
+
     pub fn simulation(
         &self,
         player: &impl PlayerTrait,
@@ -52,43 +106,20 @@ impl Simulator {
     ) -> ARes<Vec<SimulationStep>> {
         let mut game_instance = self.game_builder.build(Some(rng));
         let mut snapshots = vec![];
+        let mut num_iter = 0usize;
         loop {
             let before_step = game_instance.num_of_apples;
             let before_step_repr = game_instance.to_game_repr();
             let dir = player.choose_dir(&game_instance, rng);
             game_instance.update_direction(dir);
-            let mut num_iter = 0usize;
             let next_step = game_instance.next(rng)?;
-            let otp = match next_step {
-                StepResult::Lost { .. } => {
-                    dbg!((game_instance.steps, game_instance.num_of_apples));
-                    SimulationStep {
-                        snapshot: before_step_repr,
-                        direction: dir,
-                        reward: SimulationStepReward::Lost,
-                        next_state: None,
-                    }
-                }
-                StepResult::Win { .. } => SimulationStep {
-                    snapshot: before_step_repr,
-                    direction: dir,
-                    reward: SimulationStepReward::Won,
-                    next_state: None,
-                },
-                StepResult::Base => {
-                    num_iter += 1;
-                    SimulationStep {
-                        snapshot: before_step_repr,
-                        direction: dir,
-                        reward: if before_step == game_instance.num_of_apples {
-                            SimulationStepReward::Step
-                        } else {
-                            SimulationStepReward::Food
-                        },
-                        next_state: Some(game_instance.to_game_repr()),
-                    }
-                }
-            };
+            let otp = self.handle_next_step(
+                before_step,
+                before_step_repr,
+                dir,
+                next_step,
+                &game_instance,
+            );
             snapshots.push(otp);
             if matches!(next_step, StepResult::Win { .. } | StepResult::Lost { .. }) {
                 break;
@@ -101,6 +132,7 @@ impl Simulator {
                 });
                 break;
             }
+            num_iter += 1;
         }
         ARes::Ok(snapshots)
     }

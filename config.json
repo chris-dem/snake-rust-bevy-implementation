@@ -2,6 +2,7 @@
   "batch_size": 128,
   "rew_config": {
     "step_rew": -0.1,
+    "step_rew_imp": 0.5,
     "fruit_rew": 5,
     "win_rew": 100,
     "lose_rew": -100,
